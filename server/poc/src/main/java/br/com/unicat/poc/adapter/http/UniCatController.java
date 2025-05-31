@@ -1,10 +1,7 @@
 package br.com.unicat.poc.adapter.http;
 
-import com.azure.ai.openai.OpenAIClientBuilder;
-import com.azure.core.credential.AzureKeyCredential;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.azure.openai.AzureOpenAiChatModel;
-import org.springframework.ai.azure.openai.AzureOpenAiChatOptions;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,9 +13,8 @@ public class UniCatController {
 
     private final AzureOpenAiChatModel baseChatModel;
 
-    private final String API_KEY = "7562f54094dd2f506a90064b609f2cdd33b9983df53d60a5dfb1a810765c0d8";
-    private final String B3GPT_API = "https://api-b3gpt.b3.com.br/internal-api/b3gpt-llms/v1";
-
+    // O Spring irá injetar o AzureOpenAiChatModel que ele configurou
+    // com base nas propriedades do application.properties/yml
     public UniCatController(AzureOpenAiChatModel baseChatModel) {
         this.baseChatModel = baseChatModel;
     }
@@ -27,22 +23,8 @@ public class UniCatController {
     String generation() {
         log.info("INIT generation.");
         try {
-            var openAIClientBuilder = new OpenAIClientBuilder()
-                    .credential(new AzureKeyCredential(this.API_KEY))
-                    .endpoint(this.B3GPT_API);
-
-            var openAIChatOption = AzureOpenAiChatOptions.builder()
-                    .deploymentName("gpt-4o")
-                    .temperature(0.3)
-                    .maxTokens(100)
-                    .build();
-
-            var chatModel = AzureOpenAiChatModel.builder()
-                    .openAIClientBuilder(openAIClientBuilder)
-                    .defaultOptions(openAIChatOption)
-                    .build();
-
-            ChatResponse response = chatModel.call(
+            // Agora você usa o baseChatModel que já foi injetado e configurado
+            ChatResponse response = baseChatModel.call(
                     new Prompt("Generate the names of 5 famous pirates.")
             );
 
@@ -50,11 +32,10 @@ public class UniCatController {
             log.info("END generation.");
 
             return response.toString();
-         } catch (Exception ex) {
+        } catch (Exception ex) {
             log.error("ERROR generation. exception: {}", ex.getMessage());
+            // Considere retornar um erro HTTP apropriado em vez de null
+            return "Error occurred: " + ex.getMessage();
         }
-
-        return null;
     }
-
 }

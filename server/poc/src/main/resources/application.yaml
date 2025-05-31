@@ -1,5 +1,14 @@
 spring:
   application:
     name: poc
+
   ai:
-    b3.openai.api-key: 7562f54094dd2f506a90064b609f2cdd33b9983df53d60a5dfb1a810765c0d8
+    azure:
+      openai:
+        endpoint: https://api-b3gpt.b3.com.br/internal-api/b3gpt-llms/v1
+        api-key: 7562f54094dd2f506a90064b609f2cdd33b9983df53d60a5dfb1a810765c0d8
+        chat:
+          options:
+            deployment-name: gpt-4o
+            temperature: 0.3
+            max-tokens: 100

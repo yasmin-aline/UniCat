@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: poc
+  ai:
+    b3.openai.api-key: 7562f54094dd2f506a90064b609f2cdd33b9983df53d60a5dfb1a810765c0d8

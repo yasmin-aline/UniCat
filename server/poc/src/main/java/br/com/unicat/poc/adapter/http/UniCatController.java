@@ -23,7 +23,6 @@ public class UniCatController {
     String generation() {
         log.info("INIT generation.");
         try {
-            // Agora você usa o baseChatModel que já foi injetado e configurado
             ChatResponse response = baseChatModel.call(
                     new Prompt("Generate the names of 5 famous pirates.")
             );
@@ -32,9 +31,9 @@ public class UniCatController {
             log.info("END generation.");
 
             return response.toString();
+
         } catch (Exception ex) {
             log.error("ERROR generation. exception: {}", ex.getMessage());
-            // Considere retornar um erro HTTP apropriado em vez de null
             return "Error occurred: " + ex.getMessage();
         }
     }

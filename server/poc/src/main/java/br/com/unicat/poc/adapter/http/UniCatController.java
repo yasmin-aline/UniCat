@@ -13,8 +13,6 @@ public class UniCatController {
 
     private final AzureOpenAiChatModel baseChatModel;
 
-    // O Spring irá injetar o AzureOpenAiChatModel que ele configurou
-    // com base nas propriedades do application.properties/yml
     public UniCatController(AzureOpenAiChatModel baseChatModel) {
         this.baseChatModel = baseChatModel;
     }

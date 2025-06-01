@@ -11,4 +11,3 @@ spring:
           options:
             deployment-name: gpt4o-mini
             temperature: 0.3
-            max-tokens: 100

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-public class AnalyzeAndMapScenariosPromptGenerator {
+public class AnalyzeClassToTestPromptGenerator {
 
     public Prompt get(final String targetClassName, final String targetClassPackage, final String targetClassToTest) {
         final String prompt = String.format("""
@@ -49,7 +49,7 @@ public class AnalyzeAndMapScenariosPromptGenerator {
             • Campo: com.example.repository.UserRepository userRepository
             • Parâmetro (Construtor): com.example.config.AppConfig config
             • Parâmetro (Método someOtherMethod): com.example.service.ExternalService service
-            • (Não listar Long id ou User user ou com.example.dto.RequestData data se forem considerados DTOs/Modelos simples)
+            • (Não listar Long id ou User user ou com.example.dto.RequestData data se forem considerados Modelos simples)
             
             --- FIM DA ANÁLISE ---
             """, targetClassName, targetClassPackage, targetClassToTest);

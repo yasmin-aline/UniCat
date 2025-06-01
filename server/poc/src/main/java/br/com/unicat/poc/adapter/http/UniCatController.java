@@ -16,66 +16,53 @@ public class UniCatController {
 
     @GetMapping(path = "/unicat")
     String generation() {
-        this.generateUnitTests.run("CalculatorTest" , "public class Calculator {\n" +
+        this.generateUnitTests.run("GetWinnerTest" , "import com.deckofcards.adapter.http.dto.request.PlayerRequestDTO;\n" +
+                "import com.deckofcards.adapter.http.dto.response.WinnerPlayerResponseDTO;\n" +
+                "import com.deckofcards.entities.enums.Points;\n" +
+                "import lombok.AllArgsConstructor;\n" +
+                "import org.springframework.stereotype.Service;\n" +
                 "\n" +
-                "    /**\n" +
-                "     * Adiciona dois números inteiros.\n" +
-                "     *\n" +
-                "     * @param a O primeiro número.\n" +
-                "     * @param b O segundo número.\n" +
-                "     * @return A soma de a e b.\n" +
-                "     */\n" +
-                "    public int add(int a, int b) {\n" +
-                "        return a + b;\n" +
+                "import java.util.*;\n" +
+                "import java.util.concurrent.atomic.AtomicInteger;\n" +
+                "\n" +
+                "@Service\n" +
+                "@AllArgsConstructor\n" +
+                "public class GetWinner {\n" +
+                "\n" +
+                "\n" +
+                "    public WinnerPlayerResponseDTO execute(final List<PlayerRequestDTO> players) {\n" +
+                "        var playersPoints = new HashMap<String, Integer>();\n" +
+                "\n" +
+                "        players.forEach(player -> {\n" +
+                "            AtomicInteger sum = new AtomicInteger();\n" +
+                "            player.getCards().forEach(card ->{\n" +
+                "                var points = 0;\n" +
+                "\n" +
+                "                try {\n" +
+                "                    points += Integer.parseInt(card);\n" +
+                "                } catch (Exception e) {\n" +
+                "                    points += Points.valueOf(card).getPoint();\n" +
+                "                }\n" +
+                "\n" +
+                "                sum.addAndGet(points);\n" +
+                "            });\n" +
+                "\n" +
+                "            playersPoints.put(player.getName(), sum.get());\n" +
+                "        });\n" +
+                "\n" +
+                "        String winner = getPlayerWithHighestPoints(playersPoints);\n" +
+                "        int points = playersPoints.get(winner);\n" +
+                "        return new WinnerPlayerResponseDTO(winner, points);\n" +
                 "    }\n" +
                 "\n" +
-                "    /**\n" +
-                "     * Subtrai o segundo número do primeiro.\n" +
-                "     *\n" +
-                "     * @param a O número do qual subtrair.\n" +
-                "     * @param b O número a ser subtraído.\n" +
-                "     * @return A diferença entre a e b.\n" +
-                "     */\n" +
-                "    public int subtract(int a, int b) {\n" +
-                "        return a - b;\n" +
-                "    }\n" +
+                "    private <K, V extends Comparable<V>> K getPlayerWithHighestPoints(HashMap<K, V> playersPoints) {\n" +
+                "        Optional<Map.Entry<K, V>> winner = playersPoints.entrySet()\n" +
+                "                .stream()\n" +
+                "                .max(Map.Entry.comparingByValue());\n" +
                 "\n" +
-                "    /**\n" +
-                "     * Multiplica dois números inteiros.\n" +
-                "     *\n" +
-                "     * @param a O primeiro número.\n" +
-                "     * @param b O segundo número.\n" +
-                "     * @return O produto de a e b.\n" +
-                "     */\n" +
-                "    public int multiply(int a, int b) {\n" +
-                "        return a * b;\n" +
+                "        return winner.map(Map.Entry::getKey).orElse(null);\n" +
                 "    }\n" +
-                "\n" +
-                "    /**\n" +
-                "     * Divide o primeiro número pelo segundo.\n" +
-                "     *\n" +
-                "     * @param a O dividendo.\n" +
-                "     * @param b O divisor.\n" +
-                "     * @return O resultado da divisão inteira de a por b.\n" +
-                "     * @throws IllegalArgumentException se o divisor (b) for zero.\n" +
-                "     */\n" +
-                "    public int divide(int a, int b) {\n" +
-                "        if (b == 0) {\n" +
-                "            throw new IllegalArgumentException(\"Divisor cannot be zero\");\n" +
-                "        }\n" +
-                "        return a / b;\n" +
-                "    }\n" +
-                "\n" +
-                "    /**\n" +
-                "     * Verifica se um número é par.\n" +
-                "     *\n" +
-                "     * @param number O número a ser verificado.\n" +
-                "     * @return true se o número for par, false caso contrário.\n" +
-                "     */\n" +
-                "    public boolean isEven(int number) {\n" +
-                "        return number % 2 == 0;\n" +
-                "    }\n" +
-                "}\n", "com.example.math" );
+                "}", "com.deckofcards.usecases" );
 
         return null;
     }

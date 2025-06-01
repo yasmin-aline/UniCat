@@ -1,17 +1,23 @@
 package br.com.unicat.poc.usecases;
 
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.stereotype.Service;
 
 @Service
 public class GenerateUnitTests {
-    private final AnalyseAndMapClassUnitTestScenarios analyseAndMapClassUnitTestScenarios;
+    private final AnalyseClassToTest analyseClassToTest;
+    private final MapTestScenarios mapTestScenarios;
+    private final IdentityMethodsAndDependencies identityMethodsAndDependencies;
 
-    public GenerateUnitTests(AnalyseAndMapClassUnitTestScenarios analyseAndMapClassUnitTestScenarios) {
-        this.analyseAndMapClassUnitTestScenarios = analyseAndMapClassUnitTestScenarios;
+    public GenerateUnitTests(AnalyseClassToTest analyseClassToTest, MapTestScenarios mapTestScenarios, IdentityMethodsAndDependencies identityMethodsAndDependencies) {
+        this.analyseClassToTest = analyseClassToTest;
+        this.mapTestScenarios = mapTestScenarios;
+        this.identityMethodsAndDependencies = identityMethodsAndDependencies;
     }
 
-    public void run() {
-        // 1. [Prompt] Analisar profundamente a classe a ser testada && Mapear todos Cenários de Teste
+    public void run(final String targetClassName, final String targetClassToTest, final String targetClassPackage) {
+        // 1. [Prompt] Analisar profundamente a classe a ser testada [OK]
+        // 2. [Prompt] Mapear todos Cenários de Teste
         // 3. [Prompt] Identificar Métodos e Dependências para cada Cenário de Teste
         // 4. [Plugin] Enviar os Métodos e Dependencias
         // 5. [Prompt] Solicita as Diretrizes para Criar os Testes
@@ -22,7 +28,10 @@ public class GenerateUnitTests {
         //  Enviar cenário e erro
         // else
 
-        this.analyseAndMapClassUnitTestScenarios.run("", "");
+        AssistantMessage analyzedClass = this.analyseClassToTest.run(targetClassName, targetClassToTest, targetClassPackage);
+        AssistantMessage mappedTestScenarios = this.mapTestScenarios.run(analyzedClass);
+        AssistantMessage identifiedMethodsAndDependencies = this.identityMethodsAndDependencies.run(mappedTestScenarios);
+
     }
 
 }

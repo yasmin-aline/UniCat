@@ -16,7 +16,7 @@ public class UniCatController {
 
     @GetMapping(path = "/unicat")
     String generation() {
-        this.generateUnitTests.run("GetWinnerTest" , "import com.deckofcards.adapter.http.dto.request.PlayerRequestDTO;\n" +
+        return this.generateUnitTests.run("GetWinnerTest" , "import com.deckofcards.adapter.http.dto.request.PlayerRequestDTO;\n" +
                 "import com.deckofcards.adapter.http.dto.response.WinnerPlayerResponseDTO;\n" +
                 "import com.deckofcards.entities.enums.Points;\n" +
                 "import lombok.AllArgsConstructor;\n" +
@@ -63,7 +63,5 @@ public class UniCatController {
                 "        return winner.map(Map.Entry::getKey).orElse(null);\n" +
                 "    }\n" +
                 "}", "com.deckofcards.usecases" );
-
-        return null;
     }
 }

@@ -25,7 +25,7 @@ public class IdentifyDependenciesPromptGenerator {
             
             2. Identifique quais das Dependências Confirmadas para Mocking precisariam ter seu comportamento configurado especificamente (usando when().thenReturn(), doThrow(), verify(), etc.) para implementar e verificar este cenário em particular.
             
-            3. 
+            3. Ao finalizar a análise de mocks por cenário, crie uma lista de <key, value> onde a key será a entidade (classe) a ser mockada e o value o package que está pertence.
             
             Formato da Saída:
             Liste os resultados agrupados por cenário. Para cada cenário, indique o método sob teste e os mocks relevantes para a configuração daquele cenário.
@@ -65,8 +65,9 @@ public class IdentifyDependenciesPromptGenerator {
             --- FIM DA ANÁLISE DE MOCKS POR CENÁRIO ---
             
             Lista de Mocks
-            - userRepository: PACKAGE DO MOCK
-            - 
+            - UserRepository: br.com.example.repository.UserRepository
+            - User: br.com.example.model.User
+            - DataAccessException: br.com.example.exception.DataAccessException
             
             """, targetClassName, targetClassCode, lastAnswer, targetClassName);
 

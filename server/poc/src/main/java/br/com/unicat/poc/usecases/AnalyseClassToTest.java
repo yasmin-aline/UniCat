@@ -22,7 +22,6 @@ public class AnalyseClassToTest {
 
 
     public AssistantMessage run(final String targetClassName, final String targetClassToTest, final String targetClassPackage) {
-        // 1. [Prompt] Analisar profundamente a classe a ser testada && Mapear todos Cenários de Teste
         log.info("INIT run AnalyseAndMapClassUnitTestScenarios. target class: {}, target package: {}", targetClassName, targetClassPackage);
         final Prompt prompt = this.promptGenerator.get(targetClassName, targetClassPackage, targetClassToTest);
         ChatResponse response = this.b3gptGateway.callAPI(prompt);

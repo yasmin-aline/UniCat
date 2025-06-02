@@ -5,54 +5,48 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class GenerateUnitTests {
-    private final AnalyseClassToTest analyseClassToTest;
-    private final MapTestScenarios mapTestScenarios;
-    private final IdentityMethodsAndDependencies identityMethodsAndDependencies;
+  private final AnalyseClassToTest analyseClassToTest;
+  private final MapTestScenarios mapTestScenarios;
+  private final IdentityMethodsAndDependencies identityMethodsAndDependencies;
+  private final ImplementUnitTests implementUnitTests;
 
-    public GenerateUnitTests(AnalyseClassToTest analyseClassToTest, MapTestScenarios mapTestScenarios, IdentityMethodsAndDependencies identityMethodsAndDependencies) {
-        this.analyseClassToTest = analyseClassToTest;
-        this.mapTestScenarios = mapTestScenarios;
-        this.identityMethodsAndDependencies = identityMethodsAndDependencies;
-    }
+  public GenerateUnitTests(
+          final AnalyseClassToTest analyseClassToTest,
+          final MapTestScenarios mapTestScenarios,
+          final IdentityMethodsAndDependencies identityMethodsAndDependencies, ImplementUnitTests implementUnitTests) {
+    this.analyseClassToTest = analyseClassToTest;
+    this.mapTestScenarios = mapTestScenarios;
+    this.identityMethodsAndDependencies = identityMethodsAndDependencies;
+      this.implementUnitTests = implementUnitTests;
+  }
 
-    public String run(final String targetClassName, final String targetClassCode, final String targetClassPackage) {
-        // 1. [Prompt] Analisar profundamente a classe a ser testada [OK]
-        AssistantMessage analyzedClass = this.analyseClassToTest.run(targetClassName, targetClassCode, targetClassPackage);
+  public String run(
+      final String targetClassName, final String targetClassCode, final String targetClassPackage) {
+    // 1. [Prompt] Analisar profundamente a classe a ser testada [OK]
+    final AssistantMessage analyzedClass =
+        this.analyseClassToTest.run(targetClassName, targetClassCode, targetClassPackage);
 
-        // 2. [Prompt] Mapear todos Cenários de Teste [OK]
-        AssistantMessage mappedTestScenarios = this.mapTestScenarios.run(analyzedClass, targetClassName, targetClassCode);
+    // 2. [Prompt] Mapear todos Cenários de Teste [OK]
+    final AssistantMessage mappedTestScenarios =
+        this.mapTestScenarios.run(analyzedClass, targetClassName, targetClassCode);
 
-        // 3. [Prompt] Identificar Métodos e Dependências para cada Cenário de Teste
-        AssistantMessage identifiedMethodsAndDependencies = this.identityMethodsAndDependencies.run(mappedTestScenarios, targetClassName, targetClassCode);
-        return identifiedMethodsAndDependencies.getText();
-        // 4. [Plugin] Enviar as Dependencias Solicitadas
+    // 3. [Prompt] Identificar Métodos e Dependências para cada Cenário de Teste [OK]
+    final AssistantMessage identifiedMethodsAndDependencies =
+        this.identityMethodsAndDependencies.run(
+            mappedTestScenarios, targetClassName, targetClassCode);
 
+    return identifiedMethodsAndDependencies.getText();
+  }
 
-        // 5. [Prompt] Solicita as Diretrizes para Criar os Testes
-
-
-        // 6. [Plugin] Enviar Diretrizes
-
-
-        // 7. [Prompt] Responde com o a Implementação do Primeiro Cenário de Teste
-
-
-        // 8. [Plugin] Criar a Classe de Teste, Incluir cenário implementado e Rodar
-
-
-        // if erro
-        //  Enviar cenário e erro
-        // else
-
-
-
-
-
-
-        // 4. Recebe lista de dependencias
-        // Para cada elemento na lista, procurar o seu arquivo java no projeto
-        // Copiar o código completo do arquivo
-        // E enviar para a LLM
-    }
-
+  public String complete(
+          final String targetClassName,
+          final String targetClassCode,
+          final String targetClassPackage,
+          final String guidelines,
+          final String dependencies,
+          final String scenarios) {
+    // 7. [Prompt] Responde com o a Implementação do Primeiro Cenário de Teste
+    AssistantMessage ans = this.implementUnitTests.run(targetClassName, targetClassCode, targetClassPackage, guidelines, dependencies, scenarios);
+    return ans.getText();
+  }
 }

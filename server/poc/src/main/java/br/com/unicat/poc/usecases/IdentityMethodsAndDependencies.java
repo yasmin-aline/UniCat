@@ -11,31 +11,39 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 public class IdentityMethodsAndDependencies {
-    private final IdentifyDependenciesPromptGenerator promptGenerator;
-    private final B3GPTGateway b3gptGateway;
+  private final IdentifyDependenciesPromptGenerator promptGenerator;
+  private final B3GPTGateway b3gptGateway;
 
-    public IdentityMethodsAndDependencies(IdentifyDependenciesPromptGenerator promptGenerator, B3GPTGateway b3gptGateway) {
-        this.promptGenerator = promptGenerator;
-        this.b3gptGateway = b3gptGateway;
-    }
+  public IdentityMethodsAndDependencies(
+      IdentifyDependenciesPromptGenerator promptGenerator, B3GPTGateway b3gptGateway) {
+    this.promptGenerator = promptGenerator;
+    this.b3gptGateway = b3gptGateway;
+  }
 
-    /**
-     * Extracts scenarios, methods, and dependencies from the previous response,
-     * generates a prompt to identify dependencies per scenario, calls the IA, and returns the result.
-     *
-     * @param mappedScenariosResponse The AssistantMessage containing mapped scenarios, methods, and dependencies.
-     * @param targetClassName The name of the class being analyzed.
-     * @param targetClassCode The source code of the class being analyzed.
-     * @return AssistantMessage containing the identified dependencies per scenario or an error message.
-     */
-    public AssistantMessage run(final AssistantMessage mappedScenariosResponse, final String targetClassName, final String targetClassCode) {
-        log.info("INIT IdentityMethodsAndDependencies run for class: {}", targetClassName);
-        final String mappedScenariosResponseText = mappedScenariosResponse.getText();
+  /**
+   * Extracts scenarios, methods, and dependencies from the previous response, generates a prompt to
+   * identify dependencies per scenario, calls the IA, and returns the result.
+   *
+   * @param mappedScenariosResponse The AssistantMessage containing mapped scenarios, methods, and
+   *     dependencies.
+   * @param targetClassName The name of the class being analyzed.
+   * @param targetClassCode The source code of the class being analyzed.
+   * @return AssistantMessage containing the identified dependencies per scenario or an error
+   *     message.
+   */
+  public AssistantMessage run(
+      final AssistantMessage mappedScenariosResponse,
+      final String targetClassName,
+      final String targetClassCode) {
+    log.info("INIT IdentityMethodsAndDependencies run for class: {}", targetClassName);
+    final String mappedScenariosResponseText = mappedScenariosResponse.getText();
 
-        final Prompt prompt = this.promptGenerator.get(targetClassName, targetClassCode, mappedScenariosResponseText);
-        final ChatResponse response = this.b3gptGateway.callAPI(prompt);
+    final Prompt prompt =
+        this.promptGenerator.get(targetClassName, targetClassCode, mappedScenariosResponseText);
+    final ChatResponse response = this.b3gptGateway.callAPI(prompt);
 
-        log.info("END IdentityMethodsAndDependencies run successfully for class: {}", response.getResult());
-        return response.getResult().getOutput();
-    }
+    log.info(
+        "END IdentityMethodsAndDependencies run successfully for class: {}", response.getResult());
+    return response.getResult().getOutput();
+  }
 }

@@ -11,13 +11,14 @@ public class GenerateUnitTests {
   private final ImplementUnitTests implementUnitTests;
 
   public GenerateUnitTests(
-          final AnalyseClassToTest analyseClassToTest,
-          final MapTestScenarios mapTestScenarios,
-          final IdentityMethodsAndDependencies identityMethodsAndDependencies, ImplementUnitTests implementUnitTests) {
+      final AnalyseClassToTest analyseClassToTest,
+      final MapTestScenarios mapTestScenarios,
+      final IdentityMethodsAndDependencies identityMethodsAndDependencies,
+      ImplementUnitTests implementUnitTests) {
     this.analyseClassToTest = analyseClassToTest;
     this.mapTestScenarios = mapTestScenarios;
     this.identityMethodsAndDependencies = identityMethodsAndDependencies;
-      this.implementUnitTests = implementUnitTests;
+    this.implementUnitTests = implementUnitTests;
   }
 
   public String run(
@@ -39,14 +40,21 @@ public class GenerateUnitTests {
   }
 
   public String complete(
-          final String targetClassName,
-          final String targetClassCode,
-          final String targetClassPackage,
-          final String guidelines,
-          final String dependencies,
-          final String scenarios) {
+      final String targetClassName,
+      final String targetClassCode,
+      final String targetClassPackage,
+      final String guidelines,
+      final String dependencies,
+      final String scenarios) {
     // 7. [Prompt] Responde com o a Implementação do Primeiro Cenário de Teste
-    AssistantMessage ans = this.implementUnitTests.run(targetClassName, targetClassCode, targetClassPackage, guidelines, dependencies, scenarios);
+    AssistantMessage ans =
+        this.implementUnitTests.run(
+            targetClassName,
+            targetClassCode,
+            targetClassPackage,
+            guidelines,
+            dependencies,
+            scenarios);
     return ans.getText();
   }
 }

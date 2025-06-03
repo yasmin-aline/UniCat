@@ -83,10 +83,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                     val targetClassPackage = psiFile.packageName
                     val targetClassCode = psiFile.fileDocument.text
 
-                    println("Classe: $targetClassName")
-                    println("Pacote: $targetClassPackage")
-                    println("Código:\n$targetClassCode")
-
+                    println("INIT test generation for: $targetClassName")
                     // Monta o corpo da requisição (form-urlencoded)
                     val body = listOf(
                         "targetClassName" to targetClassName,
@@ -112,6 +109,12 @@ class MyToolWindowFactory : ToolWindowFactory {
                         val responseBody = response.body()
                         println("Resposta da API: $responseBody")
                         // Aqui você pode atualizar a UI ou mostrar mensagem ao usuário
+
+                        val parsedResponse = parseInitResponse(responseBody)
+                        println("Scenarios:\n${parsedResponse.scenarios}")
+                        println("Dependencies map:")
+                        parsedResponse.dependenciesMap.forEach { (name, pkg) -> println("$name -> $pkg") }
+
                     } catch (e: Exception) {
                         e.printStackTrace()
                         // Tratar erro de rede/exceção
@@ -123,6 +126,32 @@ class MyToolWindowFactory : ToolWindowFactory {
             } else {
                 println("Nenhum editor ativo encontrado.")
             }
+        }
+
+        private data class ParsedInitResponse(
+            val scenarios: String,
+            val dependenciesMap: Map<String, String>
+        )
+
+        private fun parseInitResponse(response: String): ParsedInitResponse {
+            val scenariosPart = response
+                .substringAfter("Análise de Mocks por Cenário", "")
+                .substringBefore("--- FIM DA ANÁLISE DE MOCKS POR CENÁRIO ---", "")
+                .trim()
+
+            val dependenciesPart = response
+                .substringAfter("Lista de Mocks", "")
+                .trim()
+
+            val dependenciesMap = dependenciesPart
+                .lines()
+                .mapNotNull {
+                    val parts = it.split(":").map { s -> s.trim() }
+                    if (parts.size == 2) parts[0] to parts[1] else null
+                }
+                .toMap()
+
+            return ParsedInitResponse(scenarios = scenariosPart, dependenciesMap = dependenciesMap)
         }
     }
 }

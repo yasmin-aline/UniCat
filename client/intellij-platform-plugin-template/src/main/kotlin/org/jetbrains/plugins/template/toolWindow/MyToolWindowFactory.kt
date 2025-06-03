@@ -190,21 +190,35 @@ class MyToolWindowFactory : ToolWindowFactory {
                             val psiClass = psiFile?.children?.firstOrNull { it is com.intellij.psi.PsiClass } as? com.intellij.psi.PsiClass
 
                             if (psiClass != null) {
-                                val configurationType = JUnitConfigurationType.getInstance()
-                                val runManager = com.intellij.execution.RunManager.getInstance(project)
-                                val configurationFactory = configurationType.configurationFactories[0]
-                                val runConfiguration = runManager.createConfiguration(psiClass.name ?: "UnnamedTestClass", configurationFactory)
-                                val junitConfig = runConfiguration.configuration as com.intellij.execution.junit.JUnitConfiguration
+                                val fullyQualifiedName = "$packageName.$className"
+                                val projectDir = java.io.File(project.basePath ?: "")
+                                val isMaven = java.io.File(projectDir, "pom.xml").exists()
+                                val isGradle = java.io.File(projectDir, "build.gradle").exists() || java.io.File(projectDir, "build.gradle.kts").exists()
 
-                                junitConfig.setModule(com.intellij.openapi.module.ModuleUtilCore.findModuleForPsiElement(psiClass))
-                                junitConfig.persistentData.TEST_OBJECT = com.intellij.execution.junit.JUnitConfiguration.TEST_CLASS
-                                junitConfig.persistentData.MAIN_CLASS_NAME = psiClass.qualifiedName
+                                val command = when {
+                                    isMaven -> "mvn -Dtest=$fullyQualifiedName test"
+                                    isGradle -> "./gradlew test --tests $fullyQualifiedName"
+                                    else -> {
+                                        println("❌ Não foi possível determinar o tipo de projeto (Maven ou Gradle).")
+                                        return
+                                    }
+                                }
+                                println("▶️ Executando teste: $command")
 
-                                val executor = com.intellij.execution.ExecutorRegistry.getInstance().getExecutorById("Run")
-                                if (executor != null) {
-                                    com.intellij.execution.ProgramRunnerUtil.executeConfiguration(runConfiguration, executor)
-                                } else {
-                                    println("Executor padrão 'Run' não encontrado.")
+                                try {
+                                    val process = ProcessBuilder(command.split(" "))
+                                        .directory(projectDir)
+                                        .redirectErrorStream(true)
+                                        .start()
+
+                                    val reader = process.inputStream.bufferedReader()
+                                    reader.lines().forEach { println("🧪 $it") }
+
+                                    val exitCode = process.waitFor()
+                                    println("✅ Execução finalizada com código de saída: $exitCode")
+                                } catch (e: Exception) {
+                                    println("❌ Erro ao executar teste: ${e.message}")
+                                    e.printStackTrace()
                                 }
                             }
                         }

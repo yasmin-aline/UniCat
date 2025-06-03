@@ -3,68 +3,110 @@ package br.com.unicat.poc.prompts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
 public class RetryUnitTestsPromptGenerator {
 
     public Prompt get(
-            String targetClassName,
-            String targetClassCode,
-            String targetClassPackage,
-            String guidelines,
-            String dependencies,
-            String scenarios,
-            List<String> testErrors
+            String targetClassName,         // Nome da classe original (ex: "UserService")
+            String targetClassPackage,      // Pacote da classe original
+            String targetClassCode,       // Código da classe original (para contexto)
+            String testClassName,         // Nome da classe de teste (ex: "UserServiceTest")
+            String testClassCode,         // Código ATUAL da classe de teste a ser corrigida
+            String guidelines,            // Diretrizes de codificação originais
+            String dependencies,          // Lista de dependências a mockar original
+            String scenarios,             // Descrição dos cenários de teste originais
+            List<Map<String, String>> failedTestsAndErrors, // Lista de mapas, cada mapa com "methodName" e "errorMessage"
+            String assertionLibrary       // Ex: "AssertJ", "JUnit 5 Assertions"
     ) {
-        StringBuilder errorsSection = new StringBuilder();
-        if (testErrors != null && !testErrors.isEmpty()) {
-            errorsSection.append("Erros encontrados nos testes:\n");
-            for (String error : testErrors) {
-                errorsSection.append("- ").append(error).append("\n");
-            }
-        }
+        // Formata a seção de erros para o prompt
+        String errorsSection = failedTestsAndErrors.stream()
+                .map(errorInfo -> String.format(
+                        "- Método de Teste Falho: `%s`\n  Erro Reportado:\n  ```\n%s\n  ```",
+                        errorInfo.getOrDefault("methodName", "N/A"),
+                        errorInfo.getOrDefault("errorMessage", "N/A")
+                ))
+                .collect(Collectors.joining("\n\n"));
 
         String prompt = String.format(
                 """
-                Contexto:
-                Classe: %s
-                Pacote: %s
-                Código:
+                **Tarefa Principal:** Refatorar a classe de teste Java `%s` para corrigir **APENAS** os métodos de teste `@Test` listados abaixo que falharam durante a execução anterior. Utilize JUnit 5, Mockito e a biblioteca de asserções `%s`. O objetivo é que todos os testes, incluindo os corrigidos, passem na próxima execução, mantendo a conformidade com as diretrizes e cenários originais.
+
+                **Contexto:**
+                - Classe Original (para referência): `%s`
+                - Pacote da Classe Original: `%s`
+                - Código da Classe Original (para referência):
+                ```java
+                %s
+                ```
+                - Classe de Teste a ser Corrigida: `%s`
+                - Código ATUAL da Classe de Teste (contém os testes falhos):
+                ```java
+                %s
+                ```
+                - Biblioteca de Asserções Preferida: `%s`
+                
+                - Diretrizes de Codificação Originais (para referência):
+                %s
+                
+                - Dependências a Mockar Originais (para referência):
+                %s
+                
+                - Cenários de Teste Originais (para referência):
+                %s
+                
+                - Testes Falhos e Seus Erros Reportados:
                 %s
 
-                Diretrizes: %s
-                Dependências: %s
-                Cenários: %s
+                **Instruções Detalhadas para Correção:**
 
-                %s
-                Tarefa:
+                1.  **Análise Focada:** Examine o `Código ATUAL da Classe de Teste` (`%s`) fornecido acima.
 
-1.Analisar a Classe: Receba a classe gerada e os resultados detalhados dos testes unitarios executados sobre ela, com foco especifico nos testes que falharam.
+                2.  **Diagnóstico Preciso por Teste Falho:** Para CADA método listado em `Testes Falhos e Seus Erros Reportados`:
+                    *   Analise cuidadosamente a `Erro Reportado` (mensagem de erro/stack trace) associada.
+                    *   Localize o código do método `@Test` correspondente dentro do `Código ATUAL da Classe de Teste`.
+                    *   Considere as `Diretrizes de Codificação Originais`, `Dependências a Mockar Originais` e `Cenários de Teste Originais` para entender a intenção do teste.
+                    *   Determine a causa raiz **específica** da falha. Exemplos comuns: Configuração incorreta de mock (`Mockito.when`), verificação de mock falha (`Mockito.verify`), asserção incorreta (usando `%s`), dados de entrada inadequados para o cenário, ou lógica interna do próprio teste que não reflete o cenário original ou as diretrizes.
 
-2.Identificar Causas Raizes: Investigue profundamente as falhas nos testes unitarios. Determine as causas raizes dos erros, que podem incluir logica incorreta na classe gerada, problemas de integracao com dependencias, casos de borda nao tratados, ou configuracoes inadequadas nos proprios testes.
+                3.  **Correção Cirúrgica e Eficiente:**
+                    *   Modifique **ESTRITAMENTE O NECESSÁRIO** dentro do corpo dos métodos `@Test` que falharam para corrigir a causa raiz identificada, mantendo a conformidade com as `Diretrizes de Codificação Originais`.
+                    *   **NÃO ALTERE** métodos `@Test` que **NÃO** estão listados na seção de falhas.
+                    *   **NÃO ALTERE** o código da classe original (`%s`). A correção é **EXCLUSIVAMENTE** na classe de teste (`%s`).
+                    *   **PRIORIZE** a correção mais simples e direta que resolva o erro específico. Evite refatorações complexas ou alterações em outras partes da classe de teste, a menos que seja absolutamente indispensável para a correção da falha.
+                    *   **Exemplos de Correções Comuns:** Ajustar `Mockito.when(...).thenReturn(...)` ou `Mockito.when(...).thenThrow(...)` para alinhar com o cenário, corrigir parâmetros ou número de invocações em `Mockito.verify(...)`, ajustar valores esperados/atuais nas asserções `%s`, modificar os dados de entrada passados ao método sob teste dentro do método `@Test`.
 
-3.Refatorar e Corrigir: Refatore a classe fornecida aplicando as melhores praticas de desenvolvimento. Corrija todos os erros que levaram as falhas nos testes unitarios. A refatoracao deve visar nao apenas a correcao dos bugs, mas tambem a melhoria da clareza, eficiencia e manutenibilidade do codigo. Garanta que a logica da classe permaneca consistente com seu proposito original, a menos que a correcao da falha exija uma modificacaoo logica justificada.
+                4.  **Manutenção da Estrutura:** Preserve a estrutura geral da classe de teste, incluindo imports, anotações de classe (`@ExtendWith`), campos (`@Mock`, `@InjectMocks`), métodos de setup (`@BeforeEach`) e métodos auxiliares. Só altere essas partes se for **essencial** para a correção de um teste falho listado.
 
-4.Garantir a Passagem dos Testes: Assegure-se de que, apos suas modificacoes, todos os testes unitarios originalmente fornecidos (incluindo os que falharam e os que passaram inicialmente) agora executem com sucesso. Se necessario, ajuste ligeiramente os testes para refletir a refatoracaoo (por exemplo, nomes de metodos atualizados), mas nao remova a logica de teste essencial.
+                5.  **Garantia de Qualidade:** O código da classe de teste resultante DEVE compilar sem erros. O objetivo principal é que, após suas correções, **TODOS** os testes na classe (incluindo os que já passavam e os que foram corrigidos) executem com sucesso.
 
-5.Retornar o Codigo Refatorado: Apresente a versao final da classe, completamente refatorada e com todos os testes unitarios passando. O codigo retornado deve estar pronto para ser integrado ao sistema. Inclua comentarios concisos apenas onde for estritamente necessário para explicar lógicas complexas ou decisões de refatoração não óbvias.
+                **Formato da Saída:**
+                Retorne **APENAS** o código Java completo e atualizado para a classe de teste `%s`. Não inclua NENHUM texto explicativo, introdução, comentários de bloco desnecessários, marcadores (`--- INÍCIO ---`, `--- FIM ---`) ou qualquer texto antes ou depois do bloco de código Java. A saída deve ser diretamente compilável.
 
-Formato de Saida:\s
-Retorne apenas o codigo Java completo para a classe de teste %sTest.java. Nao inclua nenhuma explicacao ou texto antes ou depois do bloco de codigo Java. O codigo deve estar pronto para ser compilado e executado.
+                --- INÍCIO DO CÓDIGO DA CLASSE DE TESTE REFATORADA ---
+                ```java
+                // Pacote, imports e código completo e corrigido de %s aqui...
+                ```
+                --- FIM DO CÓDIGO DA CLASSE DE TESTE REFATORADA ---
                 """,
-                targetClassName,
-                targetClassPackage,
-                targetClassCode,
-                guidelines,
-                dependencies,
-                scenarios,
-                errorsSection.toString(),
-                targetClassName
+                // Tarefa Principal
+                testClassName, assertionLibrary,
+                // Contexto
+                targetClassName, targetClassPackage, targetClassCode, testClassName, testClassCode, assertionLibrary, guidelines, dependencies, scenarios, errorsSection,
+                // Instruções
+                testClassName, // 1. Análise Focada
+                assertionLibrary, // 2. Diagnóstico (asserções)
+                targetClassName, testClassName, // 3. Correção (não alterar original, focar no teste)
+                assertionLibrary, // 3. Correção (exemplos)
+                // Formato Saída
+                testClassName, testClassName
         );
 
-        log.info("PROCESSING RetryUnitTestsPromptGenerator. prompt: {}", prompt);
+        log.info("PROCESSING OptimizedRetryUnitTestsPromptGenerator. prompt: {}", prompt);
         return new Prompt(prompt);
     }
 }

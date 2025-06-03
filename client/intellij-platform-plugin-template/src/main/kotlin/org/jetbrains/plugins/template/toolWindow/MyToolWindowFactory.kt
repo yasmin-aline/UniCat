@@ -1,5 +1,6 @@
 package org.jetbrains.plugins.template.toolWindow
 
+import com.intellij.execution.junit.JUnitConfigurationType
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
@@ -183,6 +184,29 @@ class MyToolWindowFactory : ToolWindowFactory {
                         if (virtualFile != null) {
                             com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
                                 .openFile(virtualFile, true)
+
+                            val psiManager = com.intellij.psi.PsiManager.getInstance(project)
+                            val psiFile = psiManager.findFile(virtualFile ?: return)
+                            val psiClass = psiFile?.children?.firstOrNull { it is com.intellij.psi.PsiClass } as? com.intellij.psi.PsiClass
+
+                            if (psiClass != null) {
+                                val configurationType = JUnitConfigurationType.getInstance()
+                                val runManager = com.intellij.execution.RunManager.getInstance(project)
+                                val configurationFactory = configurationType.configurationFactories[0]
+                                val runConfiguration = runManager.createConfiguration(psiClass.name ?: "UnnamedTestClass", configurationFactory)
+                                val junitConfig = runConfiguration.configuration as com.intellij.execution.junit.JUnitConfiguration
+
+                                junitConfig.setModule(com.intellij.openapi.module.ModuleUtilCore.findModuleForPsiElement(psiClass))
+                                junitConfig.persistentData.TEST_OBJECT = com.intellij.execution.junit.JUnitConfiguration.TEST_CLASS
+                                junitConfig.persistentData.MAIN_CLASS_NAME = psiClass.qualifiedName
+
+                                val executor = com.intellij.execution.ExecutorRegistry.getInstance().getExecutorById("Run")
+                                if (executor != null) {
+                                    com.intellij.execution.ProgramRunnerUtil.executeConfiguration(runConfiguration, executor)
+                                } else {
+                                    println("Executor padrão 'Run' não encontrado.")
+                                }
+                            }
                         }
 
                     } catch (e: Exception) {

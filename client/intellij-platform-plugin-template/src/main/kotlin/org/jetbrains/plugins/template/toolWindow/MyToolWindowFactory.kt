@@ -80,12 +80,42 @@ class MyToolWindowFactory : ToolWindowFactory {
                 val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document)
                 if (psiFile is PsiJavaFile) {
                     val targetClassName = psiFile.name
-                    val targetClassCode = psiFile.fileDocument.text
                     val targetClassPackage = psiFile.packageName
+                    val targetClassCode = psiFile.fileDocument.text
 
                     println("Classe: $targetClassName")
                     println("Pacote: $targetClassPackage")
                     println("Código:\n$targetClassCode")
+
+                    // Monta o corpo da requisição (form-urlencoded)
+                    val body = listOf(
+                        "targetClassName" to targetClassName,
+                        "targetClassCode" to targetClassCode,
+                        "targetClassPackage" to (targetClassPackage ?: "")
+                    ).joinToString("&") { (k, v) ->
+                        "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+                    }
+
+                    // Cria o cliente HTTP
+                    val client = java.net.http.HttpClient.newHttpClient()
+
+                    // Monta a requisição POST
+                    val request = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create("http://localhost:8080/unitcat/api/init")) // Ajuste a URL conforme necessário
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+                        .build()
+
+                    // Envia a requisição e obtém a resposta (síncrono)
+                    try {
+                        val response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                        val responseBody = response.body()
+                        println("Resposta da API: $responseBody")
+                        // Aqui você pode atualizar a UI ou mostrar mensagem ao usuário
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        // Tratar erro de rede/exceção
+                    }
 
                 } else {
                     println("O arquivo ativo não é um arquivo Java.")

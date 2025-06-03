@@ -134,10 +134,9 @@ class MyToolWindowFactory : ToolWindowFactory {
         )
 
         private fun parseInitResponse(response: String): ParsedInitResponse {
-            val scenariosPart = response
-                .substringAfter("Análise de Mocks por Cenário", "")
-                .substringBefore("--- FIM DA ANÁLISE DE MOCKS POR CENÁRIO ---", "")
-                .trim()
+            val regex = Regex("Análise de Mocks por Cenário(.*?)--- FIM DA ANÁLISE DE MOCKS POR CENÁRIO ---", RegexOption.DOT_MATCHES_ALL)
+            val matchResult = regex.find(response)
+            val scenariosPart = matchResult?.groups?.get(1)?.value?.trim() ?: ""
 
             val dependenciesPart = response
                 .substringAfter("Lista de Mocks", "")

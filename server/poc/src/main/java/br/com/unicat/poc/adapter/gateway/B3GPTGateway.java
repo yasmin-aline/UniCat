@@ -19,6 +19,7 @@ public class B3GPTGateway {
     try {
       log.info("INIT callAPI. prompt: {}", prompt.toString());
       ChatResponse response = baseChatModel.call(prompt);
+
       log.info("END callAPI. prompt: {}", prompt.toString());
       return response;
     } catch (Exception e) {

@@ -55,11 +55,14 @@ public class UnitCatController {
     final String ans = generateUnitTests.retry(
             requestDTO.getTargetClassName(),
             requestDTO.getTargetClassCode(),
+            requestDTO.getTestClassName(),
+            requestDTO.getTestClassCode(),
             requestDTO.getTargetClassPackage(),
             requestDTO.getGuidelines(),
             requestDTO.getDependencies(),
             requestDTO.getScenarios(),
-            requestDTO.getTestErrors()
+            requestDTO.getFailedTestsAndErrors(),
+            requestDTO.getAssertionLibrary()
     );
     log.info("END retry. ans: {}", ans);
     return ResponseEntity.ok().body(ans);

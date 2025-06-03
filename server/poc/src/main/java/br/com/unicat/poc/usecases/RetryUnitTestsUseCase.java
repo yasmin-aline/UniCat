@@ -9,6 +9,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -26,23 +27,29 @@ public class RetryUnitTestsUseCase {
 
     public AssistantMessage run(
             String targetClassName,
-            String targetClassCode,
             String targetClassPackage,
+            String targetClassCode,
+            String testClassName,
+            String testClassCode,
             String guidelines,
             String dependencies,
             String scenarios,
-            List<String> testErrors
+            List<Map<String, String>> failedTestsAndErrors,
+            String assertionLibrary
     ) {
         log.info("INIT RetryUnitTestsUseCase run for class: {}", targetClassName);
 
         Prompt prompt = this.promptGenerator.get(
                 targetClassName,
-                targetClassCode,
                 targetClassPackage,
+                targetClassCode,
+                testClassName,
+                testClassCode,
                 guidelines,
                 dependencies,
                 scenarios,
-                testErrors
+                failedTestsAndErrors,
+                assertionLibrary
         );
 
         log.info("PROCESSING RetryUnitTestsUseCase run. prompt: {}", prompt.toString());

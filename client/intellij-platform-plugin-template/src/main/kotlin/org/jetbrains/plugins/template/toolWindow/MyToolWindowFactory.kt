@@ -30,18 +30,18 @@ class MyToolWindowFactory : ToolWindowFactory {
 
         private val service = toolWindow.project.service<MyProjectService>()
 
+        private val textArea = JTextArea(10, 30).apply {
+            lineWrap = true
+            wrapStyleWord = true
+            border = javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        }
+
         fun getContent() = JBPanel<JBPanel<*>>(java.awt.BorderLayout()).apply {
             val label = JBLabel("Diretrizes de criação de testes do seu projeto:").apply {
                 border = javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10)
             }
 
             add(label, java.awt.BorderLayout.NORTH)
-
-            val textArea = JTextArea(10, 30).apply {
-                lineWrap = true
-                wrapStyleWord = true
-                border = javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10)
-            }
 
             val scrollPane = JScrollPane(textArea).apply {
                 preferredSize = java.awt.Dimension(Short.MAX_VALUE.toInt(), 200)
@@ -83,7 +83,12 @@ class MyToolWindowFactory : ToolWindowFactory {
                     val targetClassPackage = psiFile.packageName
                     val targetClassCode = psiFile.fileDocument.text
 
-                    println("INIT test generation for: $targetClassName")
+                    println("🔍 Classe alvo: $targetClassName")
+                    println("📦 Pacote: $targetClassPackage")
+                    println("📄 Código da classe alvo:\n$targetClassCode")
+
+                    println("📡 Enviando requisição para /unitcat/api/init...")
+
                     // Monta o corpo da requisição (form-urlencoded)
                     val body = listOf(
                         "targetClassName" to targetClassName,
@@ -107,13 +112,78 @@ class MyToolWindowFactory : ToolWindowFactory {
                     try {
                         val response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                         val responseBody = response.body()
-                        println("Resposta da API: $responseBody")
-                        // Aqui você pode atualizar a UI ou mostrar mensagem ao usuário
+                        println("✅ Resposta da API recebida:")
+                        println(responseBody)
 
                         val parsedResponse = parseInitResponse(responseBody)
-                        println("Scenarios:\n${parsedResponse.scenarios}")
-                        println("Dependencies map:")
-                        parsedResponse.dependenciesMap.forEach { (name, pkg) -> println("$name -> $pkg") }
+
+                        println("\n🧪 Cenários identificados:")
+                        println(parsedResponse.scenarios)
+
+                        println("\n📚 Mapeamento de dependências:")
+                        parsedResponse.dependenciesMap.forEach { (name, pkg) ->
+                            println(" - $name -> $pkg")
+                        }
+
+                        val dependenciasCodigo = buscarCodigoDasDependencias(project, parsedResponse.dependenciesMap)
+                        println("\n📄 Código-fonte das dependências localizadas:")
+                        println(dependenciasCodigo)
+
+                        val guidelines = textArea.text
+
+                        val completeRequestBody = listOf(
+                            "targetClassName" to targetClassName,
+                            "targetClassCode" to targetClassCode,
+                            "targetClassPackage" to (targetClassPackage ?: ""),
+                            "guidelines" to guidelines,
+                            "dependencies" to dependenciasCodigo,
+                            "scenarios" to parsedResponse.scenarios
+                        ).joinToString("&") { (k, v) ->
+                            "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+                        }
+
+                        val completeRequest = java.net.http.HttpRequest.newBuilder()
+                            .uri(java.net.URI.create("http://localhost:8080/unitcat/api/complete"))
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(completeRequestBody))
+                            .build()
+
+                        println("📡 Enviando requisição para /unitcat/api/complete...")
+                        val completeResponse = client.send(completeRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
+                        println("✅ Resposta da API (/complete):\n${completeResponse.body()}")
+
+                        // ====== Cria a classe de teste espelhando o pacote em /src/test/java ======
+                        val testClassContent = completeResponse.body().removePrefix("```java").removeSuffix("```").trim()
+
+                        // Extrai o pacote da resposta
+                        val packageLine = testClassContent.lines().firstOrNull { it.trim().startsWith("package ") }
+                        val packageName = packageLine?.removePrefix("package")?.removeSuffix(";")?.trim() ?: ""
+
+                        // Constrói o caminho de diretório com base no package
+                        val packagePath = packageName.replace('.', '/')
+                        val testRoot = java.io.File(project.basePath, "src/test/java/$packagePath")
+                        if (!testRoot.exists()) {
+                            testRoot.mkdirs()
+                        }
+
+                        // Extrai o nome da classe da primeira ocorrência de "class X"
+                        val classNameRegex = Regex("""class\s+(\w+)""")
+                        val match = classNameRegex.find(testClassContent)
+                        val className = match?.groups?.get(1)?.value ?: "GeneratedTest"
+                        val testFile = java.io.File(testRoot, "$className.java")
+
+                        // Escreve o conteúdo no arquivo
+                        testFile.writeText(testClassContent)
+                        println("📝 Classe de teste criada em: ${testFile.absolutePath}")
+
+                        // Abre a classe criada automaticamente no editor
+                        val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+                            .refreshAndFindFileByIoFile(testFile)
+
+                        if (virtualFile != null) {
+                            com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
+                                .openFile(virtualFile, true)
+                        }
 
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -151,6 +221,17 @@ class MyToolWindowFactory : ToolWindowFactory {
                 .toMap()
 
             return ParsedInitResponse(scenarios = scenariosPart, dependenciesMap = dependenciesMap)
+        }
+
+        private fun buscarCodigoDasDependencias(project: Project, dependenciesMap: Map<String, String>): String {
+            val facade = com.intellij.psi.JavaPsiFacade.getInstance(project)
+            val scope = com.intellij.psi.search.GlobalSearchScope.allScope(project)
+
+            return dependenciesMap.values.joinToString("\n\n") { qualifiedName ->
+                val psiClass = facade.findClass(qualifiedName, scope)
+                psiClass?.containingFile?.text
+                    ?: "// Classe não encontrada no projeto: $qualifiedName"
+            }
         }
     }
 }

@@ -38,7 +38,12 @@ public class GenerateUnitTests {
     String scenarios = "Somar, Subtrair, Multiplicar, Dividir";
     List<String> testErrors = List.of(
             "somar: 12:expected:<5> but was:<4>",
-            "dividir: 22:java.lang.ArithmeticException: / by zero"
+            "dividir: 22:java.lang.ArithmeticException: / by zero",
+            "subtrair: 16:expected:<2> but was:<3>",
+            "multiplicar: 18:expected:<12> but was:<10>",
+            "dividir: 24:expected:<2> but was:<3>",
+            "somar: 14:java.lang.NullPointerException",
+            "multiplicar: 20:java.lang.IllegalArgumentException: negative value not allowed"
     );
 
     String resposta = retry(

@@ -42,8 +42,8 @@ public class GenerateUnitTests {
             "subtrair: 16:expected:<2> but was:<3>",
             "multiplicar: 18:expected:<12> but was:<10>",
             "dividir: 24:expected:<2> but was:<3>",
-            "somar: 14:java.lang.NullPointerException",
-            "multiplicar: 20:java.lang.IllegalArgumentException: negative value not allowed"
+            "multiplicar: 20:java.lang.IllegalArgumentException: negative value not allowed",
+            "somar: 14:java.lang.NullPointerException"
     );
 
     String resposta = retry(

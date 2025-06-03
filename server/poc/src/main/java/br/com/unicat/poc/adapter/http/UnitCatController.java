@@ -2,6 +2,7 @@ package br.com.unicat.poc.adapter.http;
 
 import br.com.unicat.poc.adapter.http.dtos.CompleteRequestDTO;
 import br.com.unicat.poc.adapter.http.dtos.InitRequestDTO;
+import br.com.unicat.poc.adapter.http.dtos.RetryRequestDTO;
 import br.com.unicat.poc.usecases.GenerateUnitTests;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -46,6 +47,21 @@ public class UnitCatController {
             requestDTO.getScenarios());
 
     log.info("END complete. ans: {}", ans);
+    return ResponseEntity.ok().body(ans);
+  }
+  @PostMapping(path = "/retry")
+  public ResponseEntity<String> retry(@ModelAttribute final RetryRequestDTO requestDTO) {
+    log.info("INIT retry. requestDTO: {}", requestDTO);
+    final String ans = generateUnitTests.retry(
+            requestDTO.getTargetClassName(),
+            requestDTO.getTargetClassCode(),
+            requestDTO.getTargetClassPackage(),
+            requestDTO.getGuidelines(),
+            requestDTO.getDependencies(),
+            requestDTO.getScenarios(),
+            requestDTO.getTestErrors()
+    );
+    log.info("END retry. ans: {}", ans);
     return ResponseEntity.ok().body(ans);
   }
 }

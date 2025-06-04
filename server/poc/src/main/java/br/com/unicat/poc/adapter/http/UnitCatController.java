@@ -3,12 +3,12 @@ package br.com.unicat.poc.adapter.http;
 import br.com.unicat.poc.adapter.http.context.RequestContext;
 import br.com.unicat.poc.adapter.http.dtos.request.CompleteRequestDTO;
 import br.com.unicat.poc.adapter.http.dtos.request.RetryRequestDTO;
-import br.com.unicat.poc.adapter.http.dtos.response.CompleteResponseDTO;
+import br.com.unicat.poc.adapter.http.dtos.response.AnalysedLogicResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.InitResponseDTO;
+import br.com.unicat.poc.usecases.AnalyseLogicAndIdentifyScenariosUseCase;
 import br.com.unicat.poc.usecases.interfaces.CompleteUnitTestsCreationInterface;
 import br.com.unicat.poc.usecases.interfaces.InitUnitTestsCreationInterface;
 import br.com.unicat.poc.usecases.interfaces.RefactorFailingUnitTestsInterface;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -26,9 +26,10 @@ public class UnitCatController {
   private final InitUnitTestsCreationInterface initUnitTestsCreation;
   private final CompleteUnitTestsCreationInterface completeUnitTestsCreation;
   private final RefactorFailingUnitTestsInterface refactorFailingUnitTestsCreation;
+  private final AnalyseLogicAndIdentifyScenariosUseCase analyseLogicAndIdentifyScenariosUseCase;
 
   @PostMapping(path = "/init")
-  public ResponseEntity<InitResponseDTO> init(RequestContext requestContext) throws JsonProcessingException {
+  public ResponseEntity<InitResponseDTO> init(RequestContext requestContext) throws Exception {
     log.info("INIT init. requestContext: {}", requestContext);
     final InitResponseDTO ans = this.initUnitTestsCreation.execute();
 
@@ -37,10 +38,13 @@ public class UnitCatController {
   }
 
   @PostMapping(path = "/complete")
-  public ResponseEntity<CompleteResponseDTO> complete(
-      @ModelAttribute final CompleteRequestDTO requestDTO) {
+  public ResponseEntity<AnalysedLogicResponseDTO> complete(
+      @ModelAttribute final CompleteRequestDTO requestDTO,
+      RequestContext requestContext) throws Exception {
     log.info("INIT complete. requestDTO: {}", requestDTO);
-    final CompleteResponseDTO ans = this.completeUnitTestsCreation.execute();
+    final var ans = this.analyseLogicAndIdentifyScenariosUseCase.execute(requestDTO.getDependenciesName(), requestDTO.getDependencies());
+
+//    final CompleteResponseDTO ans = this.completeUnitTestsCreation.execute();
 
     log.info("END complete. ans: {}", ans);
     return ResponseEntity.ok().body(ans);

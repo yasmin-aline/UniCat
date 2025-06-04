@@ -12,6 +12,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AnalysedLogic {
   private String classFqn;
-  private String analysis_summary;
+  private String analysisSummary;
   private List<TestScenario> testScenarios;
 }

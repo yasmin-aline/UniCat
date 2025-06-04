@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 public class AnalyseLogicAndIdentityScenariosPromptGenerator {
 
   public Prompt get(final String dependencies, final String dependenciesName) {
-    RequestContext context = RequestContextHolder.getContext();
+  	RequestContext context = RequestContextHolder.getContext();
     final String targetClassName =
         context.getTargetClassPackage() + "." + context.getTargetClassName();
 
@@ -53,38 +53,38 @@ public class AnalyseLogicAndIdentityScenariosPromptGenerator {
 
 				*   **Input (Parâmetros Injetados):**
 				    *   `{{ NOME_COMPLETO_CLASSE_ALVO }}`: `com.example.service.SimpleDiscountCalculator`
-				    *   `{{ CODIGO_CLASSE_ALVO }}`: (Código da classe SimpleDiscountCalculator, que aplica desconto percentual com cap de 50% e desconto fixo que não negativa o preço, lançando IAE para inputs inválidos)
+				    *   `{{ CODIGO_CLASSE_ALVO }}`: (Código da classe SimpleDiscountCalculator, que aplica desconto percentual com cap de 50%% e desconto fixo que não negativa o preço, lançando IAE para inputs inválidos)
 				    *   `{{ CODIGO_DEPENDENCIAS }}`: (Códigos de ProductDTO [com BigDecimal price] e DiscountType [PERCENTAGE, FIXED_AMOUNT])
 
 				*   **Output JSON Esperado:**
 				    ```json
 				    {
 				      "class_fqn": "com.example.service.SimpleDiscountCalculator",
-				      "analysis_summary": "A classe calcula preço com desconto. Valida inputs (produto, tipo, valor não nulos). Aplica desconto PERCENTAGE (valor entre 0-100, cap de 50%) ou FIXED_AMOUNT (não negativa o preço). Lança IllegalArgumentException para inputs inválidos.",
+				      "analysis_summary": "A classe calcula preço com desconto. Valida inputs (produto, tipo, valor não nulos). Aplica desconto PERCENTAGE (valor entre 0-100, cap de 50%%) ou FIXED_AMOUNT (não negativa o preço). Lança IllegalArgumentException para inputs inválidos.",
 				      "test_scenarios": [
 				        {
 				          "id": "scenario_1",
-				          "description": "Testar desconto percentual válido abaixo do cap (e.g., 10%)",
+				          "description": "Testar desconto percentual válido abaixo do cap (e.g., 10%%)",
 				          "expected_outcome_type": "ASSERT_EQUALS"
 				        },
 				        {
 				          "id": "scenario_2",
-				          "description": "Testar desconto percentual exatamente no cap (50%)",
+				          "description": "Testar desconto percentual exatamente no cap (50%%)",
 				          "expected_outcome_type": "ASSERT_EQUALS"
 				        },
 				        {
 				          "id": "scenario_3",
-				          "description": "Testar desconto percentual acima do cap (e.g., 60%) deve aplicar o cap (50%)",
+				          "description": "Testar desconto percentual acima do cap (e.g., 60%%) deve aplicar o cap (50%%)",
 				          "expected_outcome_type": "ASSERT_EQUALS"
 				        },
 				        {
 				          "id": "scenario_4",
-				          "description": "Testar desconto percentual inválido (> 100%)",
+				          "description": "Testar desconto percentual inválido (> 100%%)",
 				          "expected_outcome_type": "ASSERT_THROWS_IllegalArgumentException"
 				        },
 				        {
 				          "id": "scenario_5",
-				          "description": "Testar desconto percentual inválido (< 0%)",
+				          "description": "Testar desconto percentual inválido (< 0%%)",
 				          "expected_outcome_type": "ASSERT_THROWS_IllegalArgumentException"
 				        },
 				        {
@@ -135,7 +135,6 @@ public class AnalyseLogicAndIdentityScenariosPromptGenerator {
 
 				```java
 				%s
-				// Inclua aqui o código de todas as dependências identificadas na etapa anterior, separadas por comentários ou marcadores claros.
 				```
 
 				**Resposta JSON:**

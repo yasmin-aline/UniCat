@@ -18,6 +18,6 @@ public class RetryRequestDTO {
     private String guidelines;
     private String dependencies;
     private String scenarios;
-    private List<Map<String, String>> failedTestsAndErrors;
+    private String failedTestsAndErrors;
     private String assertionLibrary;
 }

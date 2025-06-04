@@ -24,14 +24,6 @@ public class RetryUnitTestsPromptGenerator {
             List<Map<String, String>> failedTestsAndErrors, // Lista de mapas, cada mapa com "methodName" e "errorMessage"
             String assertionLibrary       // Ex: "AssertJ", "JUnit 5 Assertions"
     ) {
-        // Formata a seção de erros para o prompt
-        String errorsSection = failedTestsAndErrors.stream()
-                .map(errorInfo -> String.format(
-                        "- Método de Teste Falho: `%s`\n  Erro Reportado:\n  ```\n%s\n  ```",
-                        errorInfo.getOrDefault("methodName", "N/A"),
-                        errorInfo.getOrDefault("errorMessage", "N/A")
-                ))
-                .collect(Collectors.joining("\n\n"));
 
         String prompt = String.format(
                 """
@@ -96,7 +88,7 @@ public class RetryUnitTestsPromptGenerator {
                 // Tarefa Principal
                 testClassName, assertionLibrary,
                 // Contexto
-                targetClassName, targetClassPackage, targetClassCode, testClassName, testClassCode, assertionLibrary, guidelines, dependencies, scenarios, errorsSection,
+                targetClassName, targetClassPackage, targetClassCode, testClassName, testClassCode, assertionLibrary, guidelines, dependencies, scenarios, failedTestsAndErrors,
                 // Instruções
                 testClassName, // 1. Análise Focada
                 assertionLibrary, // 2. Diagnóstico (asserções)

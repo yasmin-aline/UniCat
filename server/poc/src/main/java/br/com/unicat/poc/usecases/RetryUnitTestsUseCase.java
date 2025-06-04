@@ -34,7 +34,7 @@ public class RetryUnitTestsUseCase {
             String guidelines,
             String dependencies,
             String scenarios,
-            List<Map<String, String>> failedTestsAndErrors,
+            String failedTestsAndErrors,
             String assertionLibrary
     ) {
         log.info("INIT RetryUnitTestsUseCase run for class: {}", targetClassName);

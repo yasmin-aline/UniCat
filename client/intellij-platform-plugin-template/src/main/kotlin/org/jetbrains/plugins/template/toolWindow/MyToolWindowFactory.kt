@@ -1,6 +1,5 @@
 package org.jetbrains.plugins.template.toolWindow
 
-import com.intellij.execution.junit.JUnitConfigurationType
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
@@ -82,8 +81,9 @@ class MyToolWindowFactory : ToolWindowFactory {
                 if (psiFile is PsiJavaFile) {
                     val targetClassName = psiFile.name
                     val targetClassPackage = psiFile.packageName
-                    val targetClassCode = psiFile.fileDocument.text
+                    val targetClassCode = document.text
 
+                    // (Seu código anterior para enviar requisições e criar classe de teste...)
                     println("🔍 Classe alvo: $targetClassName")
                     println("📦 Pacote: $targetClassPackage")
                     println("📄 Código da classe alvo:\n$targetClassCode")
@@ -104,7 +104,7 @@ class MyToolWindowFactory : ToolWindowFactory {
 
                     // Monta a requisição POST
                     val request = java.net.http.HttpRequest.newBuilder()
-                        .uri(java.net.URI.create("http://localhost:8080/unitcat/api/init")) // Ajuste a URL conforme necessário
+                        .uri(java.net.URI.create("http://localhost:8080/unitcat/api/init"))
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
                         .build()
@@ -184,153 +184,49 @@ class MyToolWindowFactory : ToolWindowFactory {
                         if (virtualFile != null) {
                             com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
                                 .openFile(virtualFile, true)
+                        }
 
-                            val psiManager = com.intellij.psi.PsiManager.getInstance(project)
-                            val psiFile = psiManager.findFile(virtualFile ?: return)
-                            val psiClass = psiFile?.children?.firstOrNull { it is com.intellij.psi.PsiClass } as? com.intellij.psi.PsiClass
+                        // Após criar o arquivo de teste, montar o comando para executar os testes
+                        val packageNameToRun = targetClassPackage ?: ""
+                        val classNameToRun = targetClassName.removeSuffix(".java")
+                        val fullyQualifiedName = "$packageNameToRun.$classNameToRun"
+                        val projectDir = java.io.File(project.basePath ?: "")
+                        val isMaven = java.io.File(projectDir, "pom.xml").exists()
+                        val isGradle = java.io.File(projectDir, "build.gradle").exists() || java.io.File(projectDir, "build.gradle.kts").exists()
 
-                            if (psiClass != null) {
-                                val fullyQualifiedName = "$packageName.$className"
-                                val projectDir = java.io.File(project.basePath ?: "")
-                                val isMaven = java.io.File(projectDir, "pom.xml").exists()
-                                val isGradle = java.io.File(projectDir, "build.gradle").exists() || java.io.File(projectDir, "build.gradle.kts").exists()
-
-                                val isWindows = System.getProperty("os.name").lowercase().contains("windows")
-
-                                val command = when {
-                                    isMaven && isWindows -> "mvn.cmd -Dtest=$fullyQualifiedName test"
-                                    isMaven -> "mvn -Dtest=$fullyQualifiedName test"
-                                    isGradle -> "./gradlew test --tests $fullyQualifiedName"
-                                    else -> {
-                                        println("❌ Não foi possível determinar o tipo de projeto (Maven ou Gradle).")
-                                        return
-                                    }
-                                }
-                                println("▶️ Executando teste: $command")
-
-                                try {
-                                    val process = ProcessBuilder(command.split(" "))
-                                        .directory(projectDir)
-                                        .redirectErrorStream(true)
-                                        .start()
-
-                                    val reader = process.inputStream.bufferedReader()
-                                    val outputLines = mutableListOf<String>()
-                                    reader.lines().forEach {
-                                        println("🧪 $it")
-                                        outputLines.add(it)
-                                    }
-
-                                    val exitCode = process.waitFor()
-                                    val fullLog = outputLines.joinToString("\n")
-
-                                    println("✅ Execução finalizada com código de saída: $exitCode")
-                                    println("📋 Logs completos da execução:")
-                                    println(fullLog)
-
-                                    // 🚨 Extrai e imprime as linhas de erro do log
-                                    val errorLines = fullLog.lines()
-                                        .filter { it.trim().startsWith("[ERROR]") }
-                                        .joinToString("\n")
-                                    println("🚨 Linhas de erro extraídas do log:")
-                                    println(errorLines)
-
-                                    // 🧨 Usa todas as linhas de erro extraídas do log
-                                    val erroCompleto = errorLines
-                                    println("🧨 Trecho crítico do erro:")
-                                    println(erroCompleto)
-
-                                    // 🔁 Tenta até 3 vezes executar e refinar os testes com /retry
-                                    repeat(3) { attempt ->
-                                        println("🔁 Tentativa ${attempt + 1} de reexecução")
-
-                                        val retryProcess = ProcessBuilder(command.split(" "))
-                                            .directory(projectDir)
-                                            .redirectErrorStream(true)
-                                            .start()
-
-                                        val retryReader = retryProcess.inputStream.bufferedReader()
-                                        val retryOutputLines = mutableListOf<String>()
-                                        retryReader.lines().forEach {
-                                            println("🔁 $it")
-                                            retryOutputLines.add(it)
-                                        }
-
-                                        val retryExitCode = retryProcess.waitFor()
-                                        val retryFullLog = retryOutputLines.joinToString("\n")
-
-                                        println("✅ Execução finalizada tentativa ${attempt + 1} com código: $retryExitCode")
-                                        println("📋 Logs completos tentativa ${attempt + 1}:\n$retryFullLog")
-
-                                        if (retryExitCode == 0) {
-                                            println("✅ Testes passaram na tentativa ${attempt + 1}")
-                                            return
-                                        }
-
-                                        println("❌ Falhas persistem. Reenviando para /retry...")
-
-                                        val retryErrorLines = retryFullLog.lines()
-                                            .filter { it.trim().startsWith("[ERROR]") }
-                                            .joinToString("\n")
-                                        val erroCompleto = retryErrorLines
-
-                                        val retryRequestBody = listOf(
-                                            "targetClassName" to targetClassName,
-                                            "targetClassCode" to targetClassCode,
-                                            "targetClassPackage" to targetClassPackage,
-                                            "testClassName" to className,
-                                            "testClassCode" to testFile.readText(),
-                                            "guidelines" to guidelines,
-                                            "dependencies" to dependenciasCodigo,
-                                            "scenarios" to parsedResponse.scenarios,
-                                            "failedTestsAndErrors" to erroCompleto,
-                                            "assertionLibrary" to "JUnit5 e Mockito"
-                                        ).joinToString("&") { (k, v) ->
-                                            "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
-                                        }
-
-                                        val retryRequest = java.net.http.HttpRequest.newBuilder()
-                                            .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
-                                            .header("Content-Type", "application/x-www-form-urlencoded")
-                                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(retryRequestBody))
-                                            .build()
-
-                                        println("📡 Enviando requisição para /unitcat/api/retry (tentativa ${attempt + 1})...")
-                                        val retryResponse = client.send(retryRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
-                                        println("✅ Resposta da API (/retry tentativa ${attempt + 1}):\n${retryResponse.body()}")
-
-                                        val refinedCode = retryResponse.body().removePrefix("```java").removeSuffix("```").trim()
-                                        testFile.writeText(refinedCode)
-
-                                        println("📝 Classe de teste sobrescrita com nova tentativa (${attempt + 1})")
-                                    }
-
-                                    // ▶️ Reexecuta Maven/Gradle após refinamento
-                                    println("▶️ Reexecutando testes após refinamento...")
-
-                                    val retryProcess = ProcessBuilder(command.split(" "))
-                                        .directory(projectDir)
-                                        .redirectErrorStream(true)
-                                        .start()
-
-                                    val retryReader = retryProcess.inputStream.bufferedReader()
-                                    val retryOutputLines = mutableListOf<String>()
-                                    retryReader.lines().forEach {
-                                        println("🔁 $it")
-                                        retryOutputLines.add(it)
-                                    }
-
-                                    val retryExitCode = retryProcess.waitFor()
-                                    val retryFullLog = retryOutputLines.joinToString("\n")
-
-                                    println("✅ Execução finalizada após retry com código de saída: $retryExitCode")
-                                    println("📋 Logs completos pós-retry:")
-                                    println(retryFullLog)
-                                } catch (e: Exception) {
-                                    println("❌ Erro ao executar teste: ${e.message}")
-                                    e.printStackTrace()
-                                }
+                        val command = when {
+                            isMaven && System.getProperty("os.name").lowercase().contains("windows") -> "mvn.cmd -Dtest=$fullyQualifiedName test"
+                            isMaven -> "mvn -Dtest=$fullyQualifiedName test"
+                            isGradle -> if (System.getProperty("os.name").lowercase().contains("windows")) "gradlew.bat test --tests $fullyQualifiedName" else "./gradlew test --tests $fullyQualifiedName"
+                            else -> {
+                                println("❌ Não foi possível determinar o tipo de projeto (Maven ou Gradle).")
+                                return
                             }
+                        }
+
+                        println("▶️ Comando para execução: $command")
+
+                        try {
+                            println("▶️ Tentando executar comando dinamicamente: $command")
+                            val process = ProcessBuilder(command.split(" "))
+                                .directory(projectDir)
+                                .redirectErrorStream(true)
+                                .start()
+
+                            val reader = process.inputStream.bufferedReader()
+                            reader.lines().forEach { println(it) }
+
+                            val exitCode = process.waitFor()
+                            println("✅ Comando finalizado com código $exitCode")
+
+                            if (exitCode != 0) {
+                                println("❌ Comando falhou. Abrindo terminal integrado para execução manual.")
+                                abrirTerminalIntegrado(project, command)
+                            }
+
+                        } catch (e: Exception) {
+                            println("⚠️ Falha ao executar comando dinamicamente: ${e.message}")
+                            abrirTerminalIntegrado(project, command)
                         }
 
                     } catch (e: Exception) {
@@ -379,6 +275,34 @@ class MyToolWindowFactory : ToolWindowFactory {
                 val psiClass = facade.findClass(qualifiedName, scope)
                 psiClass?.containingFile?.text
                     ?: "// Classe não encontrada no projeto: $qualifiedName"
+            }
+        }
+
+        private fun abrirTerminalIntegrado(project: Project, command: String) {
+            val toolWindowManager = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+            val terminalToolWindow = toolWindowManager.getToolWindow("Terminal")
+            if (terminalToolWindow != null) {
+                terminalToolWindow.activate {
+                    try {
+                        val terminalViewClass = Class.forName("com.intellij.terminal.TerminalView")
+                        val getInstanceMethod = terminalViewClass.getMethod("getInstance", Project::class.java)
+                        val terminalView = getInstanceMethod.invoke(null, project)
+
+                        val getWidgetMethod = terminalViewClass.getMethod("getWidget")
+                        val widget = getWidgetMethod.invoke(terminalView)
+
+                        val writeMethod = widget.javaClass.getMethod("writePlainMessage", String::class.java)
+                        writeMethod.invoke(widget, "$command\n")
+
+                        println("✅ Comando enviado automaticamente ao terminal integrado.")
+
+                    } catch (e: Exception) {
+                        println("⚠️ Erro ao enviar comando via reflection: ${e.message}")
+                        println("Execute manualmente o comando:\n$command")
+                    }
+                }
+            } else {
+                println("Terminal não disponível no IntelliJ. Execute manualmente o comando:\n$command")
             }
         }
     }

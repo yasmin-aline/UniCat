@@ -305,9 +305,9 @@ class MyToolWindowFactory : ToolWindowFactory {
                             "dependencies" to dependenciasCodigo,
                             "scenarios" to (parsedResponse?.scenarios ?: ""),
                             "failedTestsAndErrors" to errorLines,
-                            "assertionLibrary" to "JUnit"
+                            "assertionLibrary" to "JUnit5 e BDDMockito"
                         ).joinToString("&") { (k, v) -> java.net.URLEncoder.encode(k, "UTF-8") + "=" + java.net.URLEncoder.encode(v, "UTF-8") }
-
+                        println("[UnitCat] Scenarios: ${parsedResponse?.scenarios}")
                         val retryRequest = java.net.http.HttpRequest.newBuilder()
                             .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
                             .header("Content-Type", "application/x-www-form-urlencoded")

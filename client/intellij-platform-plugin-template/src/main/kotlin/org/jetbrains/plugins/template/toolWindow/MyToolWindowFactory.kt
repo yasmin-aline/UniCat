@@ -212,10 +212,39 @@ class MyToolWindowFactory : ToolWindowFactory {
                                         .start()
 
                                     val reader = process.inputStream.bufferedReader()
-                                    reader.lines().forEach { println("🧪 $it") }
+                                    val outputLines = mutableListOf<String>()
+                                    reader.lines().forEach {
+                                        println("🧪 $it")
+                                        outputLines.add(it)
+                                    }
 
                                     val exitCode = process.waitFor()
+                                    val fullLog = outputLines.joinToString("\n")
+
                                     println("✅ Execução finalizada com código de saída: $exitCode")
+                                    println("📋 Logs completos da execução:")
+                                    println(fullLog)
+
+                                    // 🚨 Extrai e imprime as linhas de erro do log
+                                    val errorLines = fullLog.lines()
+                                        .filter { it.trim().startsWith("[ERROR]") }
+                                        .joinToString("\n")
+                                    println("🚨 Linhas de erro extraídas do log:")
+                                    println(errorLines)
+
+                                    // 🧨 Extrai e imprime o trecho crítico do erro a partir de "[ERROR] Failed to execute goal"
+                                    val index = errorLines.lines().indexOfFirst { it.contains("[ERROR] Failed to execute goal") }
+                                    val erroCompleto = if (index != -1) {
+                                        val erroLinesList = errorLines.lines().drop(index)
+                                        val endIndex = erroLinesList.indexOfFirst { it.contains("[ERROR] -> [Help 1]") }
+                                        val finalLines = if (endIndex != -1) erroLinesList.take(endIndex + 1) else erroLinesList
+                                        finalLines.joinToString("\n")
+                                    } else {
+                                        "Nenhum trecho crítico de erro encontrado."
+                                    }
+
+                                    println("🧨 Trecho crítico do erro:")
+                                    println(erroCompleto)
                                 } catch (e: Exception) {
                                     println("❌ Erro ao executar teste: ${e.message}")
                                     e.printStackTrace()

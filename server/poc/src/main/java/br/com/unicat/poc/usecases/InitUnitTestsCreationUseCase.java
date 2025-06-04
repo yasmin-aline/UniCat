@@ -3,6 +3,7 @@ package br.com.unicat.poc.usecases;
 import br.com.unicat.poc.adapter.gateway.B3GPTGateway;
 import br.com.unicat.poc.adapter.http.dtos.response.InitResponseDTO;
 import br.com.unicat.poc.entities.AnalysedCode;
+import br.com.unicat.poc.entities.AnalysedLogic;
 import br.com.unicat.poc.prompts.AnalyseCodeAndIdentifyDependenciesPromptGenerator;
 import br.com.unicat.poc.prompts.AnalyseLogicAndIdentityScenariosPromptGenerator;
 import br.com.unicat.poc.usecases.interfaces.InitUnitTestsCreationInterface;
@@ -29,10 +30,18 @@ public class InitUnitTestsCreationUseCase implements InitUnitTestsCreationInterf
 		// Prompt 1
 		final AnalysedCode analysedCode = this.analyseCodeAndIdentifyDependencies();
 
-
 		// Prompt 2
+		final AnalysedLogic analysedLogic = this.analyseLogicAndIdentifyScenarios();
 
 		return null;
+	}
+
+	private AnalysedLogic analyseLogicAndIdentifyScenarios() {
+		final Prompt prompt = this.analyseLogicAndIdentityScenariosPromptGenerator.get();
+		final ChatResponse chatResponse = this.gateway.callAPI(prompt);
+		final AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
+		final BeanOutputConverter<AnalysedLogic> converter = new BeanOutputConverter<>(AnalysedLogic.class);
+		return converter.convert(Objects.requireNonNull(assistantMessage.getText()));
 	}
 
 	private AnalysedCode analyseCodeAndIdentifyDependencies() {

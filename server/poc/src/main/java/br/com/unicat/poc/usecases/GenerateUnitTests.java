@@ -79,40 +79,6 @@ public class GenerateUnitTests {
           String assertionLibrary
   ) {
 
-//[ERROR] Tests run: 7, Failures: 3, Errors: 2, Skipped: 0, Time elapsed: 0.128 s <<< FAILURE! - in com.deckofcards.usecases.GetWinnerTest
-//[ERROR] shouldThrowException_whenPlayersListIsNull  Time elapsed: 0.107 s  <<< FAILURE!
-//org.opentest4j.AssertionFailedError: Unexpected exception type thrown ==> expected: <java.lang.IllegalArgumentException> but was: <java.lang.NullPointerException>
-//	at com.deckofcards.usecases.GetWinnerTest.shouldThrowException_whenPlayersListIsNull(GetWinnerTest.java:111)
-//Caused by: java.lang.NullPointerException: Cannot invoke "java.util.List.forEach(java.util.function.Consumer)" because "players" is null
-//	at com.deckofcards.usecases.GetWinnerTest.lambda$shouldThrowException_whenPlayersListIsNull$0(GetWinnerTest.java:111)
-//	at com.deckofcards.usecases.GetWinnerTest.shouldThrowException_whenPlayersListIsNull(GetWinnerTest.java:111)
-//
-//[ERROR] shouldReturnWinnerWithZeroPoints_whenPlayersHaveNoCards  Time elapsed: 0.003 s  <<< FAILURE!
-//org.opentest4j.AssertionFailedError: expected: <Alice> but was: <Bob>
-//	at com.deckofcards.usecases.GetWinnerTest.shouldReturnWinnerWithZeroPoints_whenPlayersHaveNoCards(GetWinnerTest.java:88)
-//
-//[ERROR] shouldReturnFirstPlayer_whenTieOnPoints  Time elapsed: 0.001 s  <<< FAILURE!
-//org.opentest4j.AssertionFailedError: expected: <Alice> but was: <Bob>
-//	at com.deckofcards.usecases.GetWinnerTest.shouldReturnFirstPlayer_whenTieOnPoints(GetWinnerTest.java:58)
-//
-//[ERROR] shouldReturnWinnerWithNulls_whenEmptyListProvided  Time elapsed: 0.002 s  <<< ERROR!
-//java.lang.NullPointerException: Cannot invoke "java.lang.Integer.intValue()" because the return value of "java.util.HashMap.get(Object)" is null
-//	at com.deckofcards.usecases.GetWinnerTest.shouldReturnWinnerWithNulls_whenEmptyListProvided(GetWinnerTest.java:98)
-//
-//[ERROR] shouldReturnWinnerIgnoringInvalidCards  Time elapsed: 0.002 s  <<< ERROR!
-//java.lang.IllegalArgumentException: No enum constant com.deckofcards.entities.enums.Points.invalidCard
-//	at com.deckofcards.usecases.GetWinnerTest.shouldReturnWinnerIgnoringInvalidCards(GetWinnerTest.java:70)
-//
-//[ERROR] Failures:
-//[ERROR]   GetWinnerTest.shouldReturnFirstPlayer_whenTieOnPoints:58 expected: <Alice> but was: <Bob>
-//[ERROR]   GetWinnerTest.shouldReturnWinnerWithZeroPoints_whenPlayersHaveNoCards:88 expected: <Alice> but was: <Bob>
-//[ERROR]   GetWinnerTest.shouldThrowException_whenPlayersListIsNull:111 Unexpected exception type thrown ==> expected: <java.lang.IllegalArgumentException> but was: <java.lang.NullPointerException>
-//[ERROR] Errors:
-//[ERROR]   GetWinnerTest.shouldReturnWinnerIgnoringInvalidCards:70 » IllegalArgument No e...
-//[ERROR]   GetWinnerTest.shouldReturnWinnerWithNulls_whenEmptyListProvided:98 » NullPointer
-//
-//[ERROR] Tests run: 8, Failures: 3, Errors: 2, Skipped:
-
     return retryUnitTestsUseCase.run(
             targetClassName,
             targetClassPackage,

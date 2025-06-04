@@ -21,7 +21,7 @@ public class RetryUnitTestsPromptGenerator {
             String guidelines,            // Diretrizes de codificação originais
             String dependencies,          // Lista de dependências a mockar original
             String scenarios,             // Descrição dos cenários de teste originais
-            List<Map<String, String>> failedTestsAndErrors, // Lista de mapas, cada mapa com "methodName" e "errorMessage"
+            String failedTestsAndErrors, // Lista de mapas, cada mapa com "methodName" e "errorMessage"
             String assertionLibrary       // Ex: "AssertJ", "JUnit 5 Assertions"
     ) {
 

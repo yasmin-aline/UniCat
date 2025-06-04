@@ -7,7 +7,5 @@ import lombok.Data;
 @Data
 @Builder
 public class InitResponseDTO {
-  private String classFqn;
-  private String analysis_summary;
-  private List<TestScenarioResponseDTO> testScenarios;
+  private AnalysisResponseDTO analysisResponseDTO;
 }

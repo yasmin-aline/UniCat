@@ -15,40 +15,50 @@ import org.springframework.ai.converter.BeanOutputConverter;
 import java.util.Objects;
 
 public class InitUnitTestsCreationUseCase implements InitUnitTestsCreationInterface {
-	private final AnalyseCodeAndIdentifyDependenciesPromptGenerator analyseCodeAndIdentifyDependenciesPromptGenerator;
-	private final AnalyseLogicAndIdentityScenariosPromptGenerator analyseLogicAndIdentityScenariosPromptGenerator;
-	private final B3GPTGateway gateway;
+  private final AnalyseCodeAndIdentifyDependenciesPromptGenerator
+      analyseCodeAndIdentifyDependenciesPromptGenerator;
+  private final AnalyseLogicAndIdentityScenariosPromptGenerator
+      analyseLogicAndIdentityScenariosPromptGenerator;
+  private final B3GPTGateway gateway;
 
-	public InitUnitTestsCreationUseCase(AnalyseCodeAndIdentifyDependenciesPromptGenerator analyseCodeAndIdentifyDependenciesPromptGenerator, AnalyseLogicAndIdentityScenariosPromptGenerator analyseLogicAndIdentityScenariosPromptGenerator, B3GPTGateway gateway) {
-		this.analyseCodeAndIdentifyDependenciesPromptGenerator = analyseCodeAndIdentifyDependenciesPromptGenerator;
-		this.analyseLogicAndIdentityScenariosPromptGenerator = analyseLogicAndIdentityScenariosPromptGenerator;
-		this.gateway = gateway;
-	}
+  public InitUnitTestsCreationUseCase(
+      AnalyseCodeAndIdentifyDependenciesPromptGenerator
+          analyseCodeAndIdentifyDependenciesPromptGenerator,
+      AnalyseLogicAndIdentityScenariosPromptGenerator
+          analyseLogicAndIdentityScenariosPromptGenerator,
+      B3GPTGateway gateway) {
+    this.analyseCodeAndIdentifyDependenciesPromptGenerator =
+        analyseCodeAndIdentifyDependenciesPromptGenerator;
+    this.analyseLogicAndIdentityScenariosPromptGenerator =
+        analyseLogicAndIdentityScenariosPromptGenerator;
+    this.gateway = gateway;
+  }
 
-	@Override
-	public InitResponseDTO execute() {
-		// Prompt 1
-		final AnalysedCode analysedCode = this.analyseCodeAndIdentifyDependencies();
+  @Override
+  public InitResponseDTO execute() {
+    // Prompt 1
+    final AnalysedCode analysedCode = this.analyseCodeAndIdentifyDependencies();
 
-		// Prompt 2
-		final AnalysedLogic analysedLogic = this.analyseLogicAndIdentifyScenarios();
+    return null;
+  }
 
-		return null;
-	}
+//  private AnalysedLogic analyseLogicAndIdentifyScenarios(final AnalysedCode analysedCode) {
+//	 final dependenciesName analysedCode.getCustomDependencies()
+//
+//    final Prompt prompt = this.analyseLogicAndIdentityScenariosPromptGenerator.get("", "");
+//    final ChatResponse chatResponse = this.gateway.callAPI(prompt);
+//    final AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
+//    final BeanOutputConverter<AnalysedLogic> converter =
+//        new BeanOutputConverter<>(AnalysedLogic.class);
+//    return converter.convert(Objects.requireNonNull(assistantMessage.getText()));
+//  }
 
-	private AnalysedLogic analyseLogicAndIdentifyScenarios() {
-		final Prompt prompt = this.analyseLogicAndIdentityScenariosPromptGenerator.get();
-		final ChatResponse chatResponse = this.gateway.callAPI(prompt);
-		final AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
-		final BeanOutputConverter<AnalysedLogic> converter = new BeanOutputConverter<>(AnalysedLogic.class);
-		return converter.convert(Objects.requireNonNull(assistantMessage.getText()));
-	}
-
-	private AnalysedCode analyseCodeAndIdentifyDependencies() {
-		final Prompt prompt = this.analyseCodeAndIdentifyDependenciesPromptGenerator.get();
-		final ChatResponse chatResponse = this.gateway.callAPI(prompt);
-		final AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
-		final BeanOutputConverter<AnalysedCode> converter  = new BeanOutputConverter<>(AnalysedCode.class);
-		return converter.convert(Objects.requireNonNull(assistantMessage.getText()));
-	}
+  private AnalysedCode analyseCodeAndIdentifyDependencies() {
+    final Prompt prompt = this.analyseCodeAndIdentifyDependenciesPromptGenerator.get();
+    final ChatResponse chatResponse = this.gateway.callAPI(prompt);
+    final AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
+    final BeanOutputConverter<AnalysedCode> converter =
+        new BeanOutputConverter<>(AnalysedCode.class);
+    return converter.convert(Objects.requireNonNull(assistantMessage.getText()));
+  }
 }

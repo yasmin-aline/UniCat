@@ -3,7 +3,7 @@ package br.com.unicat.poc.adapter.http;
 import br.com.unicat.poc.adapter.http.context.RequestContext;
 import br.com.unicat.poc.adapter.http.dtos.request.CompleteRequestDTO;
 import br.com.unicat.poc.adapter.http.dtos.request.RetryRequestDTO;
-import br.com.unicat.poc.adapter.http.dtos.response.AnalysedLogicResponseDTO;
+import br.com.unicat.poc.adapter.http.dtos.response.CompleteResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.InitResponseDTO;
 import br.com.unicat.poc.usecases.AnalyseLogicAndIdentifyScenariosUseCase;
 import br.com.unicat.poc.usecases.interfaces.CompleteUnitTestsCreationInterface;
@@ -38,16 +38,15 @@ public class UnitCatController {
   }
 
   @PostMapping(path = "/complete")
-  public ResponseEntity<AnalysedLogicResponseDTO> complete(
+  public ResponseEntity<CompleteResponseDTO> complete(
       @ModelAttribute final CompleteRequestDTO requestDTO,
       RequestContext requestContext) throws Exception {
     log.info("INIT complete. requestDTO: {}", requestDTO);
-    final var ans = this.analyseLogicAndIdentifyScenariosUseCase.execute(requestDTO.getDependenciesName(), requestDTO.getDependencies());
+    final var analysedLogicResponseDTO = this.analyseLogicAndIdentifyScenariosUseCase.execute(requestDTO.dependenciesName(), requestDTO.dependencies());
+    final var testClassGenerated = this.completeUnitTestsCreation.execute(requestDTO, analysedLogicResponseDTO);
 
-//    final CompleteResponseDTO ans = this.completeUnitTestsCreation.execute();
-
-    log.info("END complete. ans: {}", ans);
-    return ResponseEntity.ok().body(ans);
+    log.info("END complete. ans: {}", testClassGenerated);
+    return ResponseEntity.ok().body(testClassGenerated);
   }
 
   @PostMapping(path = "/retry")

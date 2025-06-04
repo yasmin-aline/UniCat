@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class GeneratedClasse {
+public class GeneratedClass {
   private String generatedTestClassFqn;
   private String generatedTestCode;
 }

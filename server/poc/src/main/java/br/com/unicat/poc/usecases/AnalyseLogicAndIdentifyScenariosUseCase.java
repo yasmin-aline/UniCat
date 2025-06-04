@@ -20,24 +20,25 @@ public class AnalyseLogicAndIdentifyScenariosUseCase implements AnalyseLogicAndI
 
     @Override
     public AnalysedLogicResponseDTO execute(final String dependenciesName, final String dependencies) throws Exception {
+        log.info("INIT AnalyseLogicAndIdentifyScenariosUseCase execute. dependenciesName: {}", dependenciesName);
+
         final var prompt = this.analyseLogicAndIdentityScenariosPromptGenerator.get(dependencies, dependenciesName);
         final var chatResponse = this.b3gptGateway.callAPI(prompt);
         final var assistantMessage = chatResponse.getResult().getOutput();
 
-        final AnalysedLogic analysedLogic = JsonLlmResponseParser.parseLlmResponse(assistantMessage, AnalysedLogic.class);
+        final var analysedLogic = JsonLlmResponseParser.parseLlmResponse(assistantMessage, AnalysedLogic.class);
 
-        return AnalysedLogicResponseDTO.builder()
-            .classFqn(analysedLogic.getClassFqn())
-            .analysisSummary(analysedLogic.getAnalysisSummary())
-            .testScenarios(
+        log.info("END AnalyseLogicAndIdentifyScenariosUseCase execute. analysedLogic: {}", analysedLogic);
+        return new AnalysedLogicResponseDTO(
+                analysedLogic.getClassFqn(),
+                analysedLogic.getAnalysisSummary(),
                 analysedLogic.getTestScenarios().stream()
-                    .map(scenario -> TestScenarioResponseDTO.builder()
-                        .id(scenario.getId())
-                        .description(scenario.getDescription())
-                        .expectedOutcomeType(scenario.getExpectedOutcomeType())
-                        .build())
-                    .toList()
-            )
-            .build();
+                        .map(scenario -> new TestScenarioResponseDTO(
+                                scenario.getId(),
+                                scenario.getDescription(),
+                                scenario.getExpectedOutcomeType()
+                        ))
+                        .toList()
+        );
     }
 }

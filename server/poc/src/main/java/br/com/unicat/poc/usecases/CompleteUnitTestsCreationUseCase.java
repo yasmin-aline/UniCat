@@ -1,44 +1,50 @@
 package br.com.unicat.poc.usecases;
 
 import br.com.unicat.poc.adapter.gateway.B3GPTGateway;
+import br.com.unicat.poc.adapter.http.dtos.request.CompleteRequestDTO;
+import br.com.unicat.poc.adapter.http.dtos.response.AnalysedLogicResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.CompleteResponseDTO;
-import br.com.unicat.poc.entities.GeneratedClasse;
+import br.com.unicat.poc.entities.GeneratedClass;
 import br.com.unicat.poc.prompts.GenerateUnitTestsPromptGenerator;
 import br.com.unicat.poc.usecases.interfaces.CompleteUnitTestsCreationInterface;
-import java.util.Objects;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.converter.BeanOutputConverter;
+import br.com.unicat.poc.usecases.utilities.JsonLlmResponseParser;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
+@Slf4j
+@Service
+@RequiredArgsConstructor
 public class CompleteUnitTestsCreationUseCase implements CompleteUnitTestsCreationInterface {
+    private final GenerateUnitTestsPromptGenerator generateUnitTestsPromptGenerator;
+    private final B3GPTGateway gateway;
 
-  private final GenerateUnitTestsPromptGenerator generateUnitTestsPromptGenerator;
-  private final B3GPTGateway gateway;
 
-  public CompleteUnitTestsCreationUseCase(
-      GenerateUnitTestsPromptGenerator generateUnitTestsPromptGenerator, B3GPTGateway gateway) {
-    this.generateUnitTestsPromptGenerator = generateUnitTestsPromptGenerator;
-    this.gateway = gateway;
-  }
+    @Override
+    public CompleteResponseDTO execute(CompleteRequestDTO requestDTO, AnalysedLogicResponseDTO analysedLogicResponseDTO) throws Exception {
+        log.info("INIT CompleteUnitTestsCreationUseCase execute. request: {}, analysed logic: {}", requestDTO, analysedLogicResponseDTO);
 
-  @Override
-  public CompleteResponseDTO execute() {
-    // Prompt 3
-    final GeneratedClasse generated = this.generateUnitTests();
+        ObjectMapper mapper = new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+        String testScenariosJson = mapper.writeValueAsString(analysedLogicResponseDTO.testScenarios());
 
-    return CompleteResponseDTO.builder()
-        .generatedTestClassFqn(generated.getGeneratedTestClassFqn())
-        .generatedTestCode(generated.getGeneratedTestCode())
-        .build();
-  }
+        final var prompt = this.generateUnitTestsPromptGenerator.get(
+            requestDTO.dependenciesName(),
+            requestDTO.dependencies(),
+            testScenariosJson
+        );
 
-  private GeneratedClasse generateUnitTests() {
-    final Prompt prompt = this.generateUnitTestsPromptGenerator.get();
-    final ChatResponse chatResponse = this.gateway.callAPI(prompt);
-    final AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
-    final BeanOutputConverter<GeneratedClasse> converter =
-        new BeanOutputConverter<>(GeneratedClasse.class);
-    return converter.convert(Objects.requireNonNull(assistantMessage.getText()));
-  }
+        final var chatResponse = this.gateway.callAPI(prompt);
+        final var assistantMessage = chatResponse.getResult().getOutput();
+
+        final var generatedClass = JsonLlmResponseParser.parseLlmResponse(assistantMessage, GeneratedClass.class);
+        assert generatedClass != null;
+
+        log.info("END CompleteUnitTestsCreationUseCase execute. generatedClass: {}", generatedClass);
+        return CompleteResponseDTO.builder()
+                .generatedTestClassFqn(generatedClass.getGeneratedTestClassFqn())
+                .generatedTestCode(generatedClass.getGeneratedTestCode())
+                .build();
+    }
 }

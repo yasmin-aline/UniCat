@@ -232,19 +232,97 @@ class MyToolWindowFactory : ToolWindowFactory {
                                     println("🚨 Linhas de erro extraídas do log:")
                                     println(errorLines)
 
-                                    // 🧨 Extrai e imprime o trecho crítico do erro a partir de "[ERROR] Failed to execute goal"
-                                    val index = errorLines.lines().indexOfFirst { it.contains("[ERROR] Failed to execute goal") }
-                                    val erroCompleto = if (index != -1) {
-                                        val erroLinesList = errorLines.lines().drop(index)
-                                        val endIndex = erroLinesList.indexOfFirst { it.contains("[ERROR] -> [Help 1]") }
-                                        val finalLines = if (endIndex != -1) erroLinesList.take(endIndex + 1) else erroLinesList
-                                        finalLines.joinToString("\n")
-                                    } else {
-                                        "Nenhum trecho crítico de erro encontrado."
-                                    }
-
+                                    // 🧨 Usa todas as linhas de erro extraídas do log
+                                    val erroCompleto = errorLines
                                     println("🧨 Trecho crítico do erro:")
                                     println(erroCompleto)
+
+                                    // 🔁 Tenta até 3 vezes executar e refinar os testes com /retry
+                                    repeat(3) { attempt ->
+                                        println("🔁 Tentativa ${attempt + 1} de reexecução")
+
+                                        val retryProcess = ProcessBuilder(command.split(" "))
+                                            .directory(projectDir)
+                                            .redirectErrorStream(true)
+                                            .start()
+
+                                        val retryReader = retryProcess.inputStream.bufferedReader()
+                                        val retryOutputLines = mutableListOf<String>()
+                                        retryReader.lines().forEach {
+                                            println("🔁 $it")
+                                            retryOutputLines.add(it)
+                                        }
+
+                                        val retryExitCode = retryProcess.waitFor()
+                                        val retryFullLog = retryOutputLines.joinToString("\n")
+
+                                        println("✅ Execução finalizada tentativa ${attempt + 1} com código: $retryExitCode")
+                                        println("📋 Logs completos tentativa ${attempt + 1}:\n$retryFullLog")
+
+                                        if (retryExitCode == 0) {
+                                            println("✅ Testes passaram na tentativa ${attempt + 1}")
+                                            return
+                                        }
+
+                                        println("❌ Falhas persistem. Reenviando para /retry...")
+
+                                        val retryErrorLines = retryFullLog.lines()
+                                            .filter { it.trim().startsWith("[ERROR]") }
+                                            .joinToString("\n")
+                                        val erroCompleto = retryErrorLines
+
+                                        val retryRequestBody = listOf(
+                                            "targetClassName" to targetClassName,
+                                            "targetClassCode" to targetClassCode,
+                                            "targetClassPackage" to targetClassPackage,
+                                            "testClassName" to className,
+                                            "testClassCode" to testFile.readText(),
+                                            "guidelines" to guidelines,
+                                            "dependencies" to dependenciasCodigo,
+                                            "scenarios" to parsedResponse.scenarios,
+                                            "failedTestsAndErrors" to erroCompleto,
+                                            "assertionLibrary" to "JUnit5 e Mockito"
+                                        ).joinToString("&") { (k, v) ->
+                                            "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+                                        }
+
+                                        val retryRequest = java.net.http.HttpRequest.newBuilder()
+                                            .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
+                                            .header("Content-Type", "application/x-www-form-urlencoded")
+                                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(retryRequestBody))
+                                            .build()
+
+                                        println("📡 Enviando requisição para /unitcat/api/retry (tentativa ${attempt + 1})...")
+                                        val retryResponse = client.send(retryRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
+                                        println("✅ Resposta da API (/retry tentativa ${attempt + 1}):\n${retryResponse.body()}")
+
+                                        val refinedCode = retryResponse.body().removePrefix("```java").removeSuffix("```").trim()
+                                        testFile.writeText(refinedCode)
+
+                                        println("📝 Classe de teste sobrescrita com nova tentativa (${attempt + 1})")
+                                    }
+
+                                    // ▶️ Reexecuta Maven/Gradle após refinamento
+                                    println("▶️ Reexecutando testes após refinamento...")
+
+                                    val retryProcess = ProcessBuilder(command.split(" "))
+                                        .directory(projectDir)
+                                        .redirectErrorStream(true)
+                                        .start()
+
+                                    val retryReader = retryProcess.inputStream.bufferedReader()
+                                    val retryOutputLines = mutableListOf<String>()
+                                    retryReader.lines().forEach {
+                                        println("🔁 $it")
+                                        retryOutputLines.add(it)
+                                    }
+
+                                    val retryExitCode = retryProcess.waitFor()
+                                    val retryFullLog = retryOutputLines.joinToString("\n")
+
+                                    println("✅ Execução finalizada após retry com código de saída: $retryExitCode")
+                                    println("📋 Logs completos pós-retry:")
+                                    println(retryFullLog)
                                 } catch (e: Exception) {
                                     println("❌ Erro ao executar teste: ${e.message}")
                                     e.printStackTrace()

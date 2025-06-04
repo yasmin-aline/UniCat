@@ -195,7 +195,10 @@ class MyToolWindowFactory : ToolWindowFactory {
                                 val isMaven = java.io.File(projectDir, "pom.xml").exists()
                                 val isGradle = java.io.File(projectDir, "build.gradle").exists() || java.io.File(projectDir, "build.gradle.kts").exists()
 
+                                val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+
                                 val command = when {
+                                    isMaven && isWindows -> "mvn.cmd -Dtest=$fullyQualifiedName test"
                                     isMaven -> "mvn -Dtest=$fullyQualifiedName test"
                                     isGradle -> "./gradlew test --tests $fullyQualifiedName"
                                     else -> {

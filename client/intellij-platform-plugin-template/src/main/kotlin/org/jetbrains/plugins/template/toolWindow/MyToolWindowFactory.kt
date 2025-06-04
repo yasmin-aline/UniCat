@@ -1,8 +1,15 @@
 package org.jetbrains.plugins.template.toolWindow
 
+import com.intellij.execution.process.ProcessAdapter
+import com.intellij.execution.process.ProcessEvent
+import com.intellij.execution.runners.ProgramRunner
+import com.intellij.execution.ui.RunContentDescriptor
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.psi.PsiDocumentManager
@@ -10,7 +17,12 @@ import com.intellij.psi.PsiJavaFile
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.content.ContentFactory
+import org.jetbrains.idea.maven.execution.MavenRunConfigurationType
+import org.jetbrains.idea.maven.execution.MavenRunnerParameters
+import org.jetbrains.idea.maven.execution.MavenRunnerSettings
+import org.jetbrains.idea.maven.project.MavenGeneralSettings
 import org.jetbrains.plugins.template.services.MyProjectService
+import java.io.ByteArrayOutputStream
 import javax.swing.JButton
 import javax.swing.JScrollPane
 import javax.swing.JTextArea
@@ -35,6 +47,17 @@ class MyToolWindowFactory : ToolWindowFactory {
             wrapStyleWord = true
             border = javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10)
         }
+
+        // Propriedade para armazenar o arquivo de teste gerado
+        private lateinit var testFile: java.io.File
+
+        // Variáveis elevadas para uso em processTerminated
+        private var targetClassName: String = ""
+        private var targetClassPackage: String = ""
+        private var targetClassCode: String = ""
+        private var guidelines: String = ""
+        private var dependenciasCodigo: String = ""
+        private var parsedResponse: ParsedInitResponse? = null
 
         fun getContent() = JBPanel<JBPanel<*>>(java.awt.BorderLayout()).apply {
             val label = JBLabel("Diretrizes de criação de testes do seu projeto:").apply {
@@ -79,16 +102,13 @@ class MyToolWindowFactory : ToolWindowFactory {
                 val document = editor.document
                 val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document)
                 if (psiFile is PsiJavaFile) {
-                    val targetClassName = psiFile.name
-                    val targetClassPackage = psiFile.packageName
-                    val targetClassCode = document.text
+                    targetClassName = psiFile.name
+                    targetClassPackage = psiFile.packageName
+                    targetClassCode = document.text
 
                     // (Seu código anterior para enviar requisições e criar classe de teste...)
-                    println("🔍 Classe alvo: $targetClassName")
-                    println("📦 Pacote: $targetClassPackage")
-                    println("📄 Código da classe alvo:\n$targetClassCode")
-
-                    println("📡 Enviando requisição para /unitcat/api/init...")
+                    println("[UnitCat] Classe alvo: $targetClassName (pacote: $targetClassPackage)")
+                    println("[UnitCat] Enviando requisição /init...")
 
                     // Monta o corpo da requisição (form-urlencoded)
                     val body = listOf(
@@ -113,24 +133,16 @@ class MyToolWindowFactory : ToolWindowFactory {
                     try {
                         val response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                         val responseBody = response.body()
-                        println("✅ Resposta da API recebida:")
-                        println(responseBody)
+                        println("[UnitCat] Resposta /init recebida com sucesso.")
 
-                        val parsedResponse = parseInitResponse(responseBody)
+                        parsedResponse = parseInitResponse(responseBody)
 
-                        println("\n🧪 Cenários identificados:")
-                        println(parsedResponse.scenarios)
+                        println("[UnitCat] Cenários identificados extraídos.")
+                        println("[UnitCat] Dependências mapeadas: ${parsedResponse?.dependenciesMap?.size ?: 0}")
+                        dependenciasCodigo = buscarCodigoDasDependencias(project, parsedResponse?.dependenciesMap ?: emptyMap())
+                        println("[UnitCat] Códigos das dependências localizados.")
 
-                        println("\n📚 Mapeamento de dependências:")
-                        parsedResponse.dependenciesMap.forEach { (name, pkg) ->
-                            println(" - $name -> $pkg")
-                        }
-
-                        val dependenciasCodigo = buscarCodigoDasDependencias(project, parsedResponse.dependenciesMap)
-                        println("\n📄 Código-fonte das dependências localizadas:")
-                        println(dependenciasCodigo)
-
-                        val guidelines = textArea.text
+                        guidelines = textArea.text
 
                         val completeRequestBody = listOf(
                             "targetClassName" to targetClassName,
@@ -138,7 +150,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                             "targetClassPackage" to (targetClassPackage ?: ""),
                             "guidelines" to guidelines,
                             "dependencies" to dependenciasCodigo,
-                            "scenarios" to parsedResponse.scenarios
+                            "scenarios" to (parsedResponse?.scenarios ?: "")
                         ).joinToString("&") { (k, v) ->
                             "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
                         }
@@ -149,9 +161,8 @@ class MyToolWindowFactory : ToolWindowFactory {
                             .POST(java.net.http.HttpRequest.BodyPublishers.ofString(completeRequestBody))
                             .build()
 
-                        println("📡 Enviando requisição para /unitcat/api/complete...")
+                        println("[UnitCat] Requisição /complete enviada e resposta recebida.")
                         val completeResponse = client.send(completeRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
-                        println("✅ Resposta da API (/complete):\n${completeResponse.body()}")
 
                         // ====== Cria a classe de teste espelhando o pacote em /src/test/java ======
                         val testClassContent = completeResponse.body().removePrefix("```java").removeSuffix("```").trim()
@@ -171,11 +182,11 @@ class MyToolWindowFactory : ToolWindowFactory {
                         val classNameRegex = Regex("""class\s+(\w+)""")
                         val match = classNameRegex.find(testClassContent)
                         val className = match?.groups?.get(1)?.value ?: "GeneratedTest"
-                        val testFile = java.io.File(testRoot, "$className.java")
+                        testFile = java.io.File(testRoot, "$className.java")
 
                         // Escreve o conteúdo no arquivo
                         testFile.writeText(testClassContent)
-                        println("📝 Classe de teste criada em: ${testFile.absolutePath}")
+                        println("[UnitCat] Classe de teste salva em: ${testFile.name}")
 
                         // Abre a classe criada automaticamente no editor
                         val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
@@ -187,47 +198,8 @@ class MyToolWindowFactory : ToolWindowFactory {
                         }
 
                         // Após criar o arquivo de teste, montar o comando para executar os testes
-                        val packageNameToRun = targetClassPackage ?: ""
-                        val classNameToRun = targetClassName.removeSuffix(".java")
-                        val fullyQualifiedName = "$packageNameToRun.$classNameToRun"
-                        val projectDir = java.io.File(project.basePath ?: "")
-                        val isMaven = java.io.File(projectDir, "pom.xml").exists()
-                        val isGradle = java.io.File(projectDir, "build.gradle").exists() || java.io.File(projectDir, "build.gradle.kts").exists()
-
-                        val command = when {
-                            isMaven && System.getProperty("os.name").lowercase().contains("windows") -> "mvn.cmd -Dtest=$fullyQualifiedName test"
-                            isMaven -> "mvn -Dtest=$fullyQualifiedName test"
-                            isGradle -> if (System.getProperty("os.name").lowercase().contains("windows")) "gradlew.bat test --tests $fullyQualifiedName" else "./gradlew test --tests $fullyQualifiedName"
-                            else -> {
-                                println("❌ Não foi possível determinar o tipo de projeto (Maven ou Gradle).")
-                                return
-                            }
-                        }
-
-                        println("▶️ Comando para execução: $command")
-
-                        try {
-                            println("▶️ Tentando executar comando dinamicamente: $command")
-                            val process = ProcessBuilder(command.split(" "))
-                                .directory(projectDir)
-                                .redirectErrorStream(true)
-                                .start()
-
-                            val reader = process.inputStream.bufferedReader()
-                            reader.lines().forEach { println(it) }
-
-                            val exitCode = process.waitFor()
-                            println("✅ Comando finalizado com código $exitCode")
-
-                            if (exitCode != 0) {
-                                println("❌ Comando falhou. Abrindo terminal integrado para execução manual.")
-                                abrirTerminalIntegrado(project, command)
-                            }
-
-                        } catch (e: Exception) {
-                            println("⚠️ Falha ao executar comando dinamicamente: ${e.message}")
-                            abrirTerminalIntegrado(project, command)
-                        }
+                        println("[UnitCat] Executando testes Maven...")
+                        executarGoalMaven(project, 0)
 
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -278,32 +250,107 @@ class MyToolWindowFactory : ToolWindowFactory {
             }
         }
 
-        private fun abrirTerminalIntegrado(project: Project, command: String) {
-            val toolWindowManager = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
-            val terminalToolWindow = toolWindowManager.getToolWindow("Terminal")
-            if (terminalToolWindow != null) {
-                terminalToolWindow.activate {
-                    try {
-                        val terminalViewClass = Class.forName("com.intellij.terminal.TerminalView")
-                        val getInstanceMethod = terminalViewClass.getMethod("getInstance", Project::class.java)
-                        val terminalView = getInstanceMethod.invoke(null, project)
+        private fun executarGoalMaven(project: Project, retryCount: Int = 0, goal: String = "test") {
+            val mavenProject = org.jetbrains.idea.maven.project.MavenProjectsManager.getInstance(project).projects.firstOrNull() ?: return
 
-                        val getWidgetMethod = terminalViewClass.getMethod("getWidget")
-                        val widget = getWidgetMethod.invoke(terminalView)
+            // Assegura que `mavenProject.directory` seja uma String de caminho.
+            // O MavenRunnerParameters espera uma String.
+            val projectDirPath = mavenProject.directory
 
-                        val writeMethod = widget.javaClass.getMethod("writePlainMessage", String::class.java)
-                        writeMethod.invoke(widget, "$command\n")
+            val parameters = MavenRunnerParameters(
+                true,
+                projectDirPath,
+                null as String?,           // pomFileName (o `null as String?` é redundante aqui, `null` já funciona)
+                listOf(goal),   // goals
+                emptyList()     // explicitEnabledProfiles
+            )
 
-                        println("✅ Comando enviado automaticamente ao terminal integrado.")
+            val settings = MavenRunnerSettings()
 
-                    } catch (e: Exception) {
-                        println("⚠️ Erro ao enviar comando via reflection: ${e.message}")
-                        println("Execute manualmente o comando:\n$command")
+            val generalSettings: MavenGeneralSettings? = null
+
+            val outputStream = ByteArrayOutputStream()
+            val processListener = object : ProcessAdapter() {
+                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                    super.onTextAvailable(event, outputType)
+                    outputStream.write(event.text.toByteArray())
+                }
+                override fun startNotified(event: ProcessEvent) {
+                    super.startNotified(event)
+                }
+                override fun processTerminated(event: ProcessEvent) {
+                    super.processTerminated(event)
+                    // Verificação do limite de tentativas de retry
+                    if (retryCount >= 3) {
+                        println("[UnitCat] Limite de 3 tentativas de retry atingido.")
+                        return
+                    }
+                    val logContent = outputStream.toString(Charsets.UTF_8.name())
+                    println("[UnitCat] Logs Maven capturados.")
+                    println("[UnitCat] Processo Maven finalizado (código: ${event.exitCode})")
+
+                    val errorLines = logContent.lines()
+                        .filter { it.contains("[ERROR]") || it.contains("COMPILATION ERROR") || it.contains("BUILD FAILURE") }
+                        .joinToString("\n")
+
+                    if (errorLines.isNotBlank()) {
+                        println("[UnitCat] Erros Maven capturados (${errorLines.lines().size} linhas).")
+                        val retryBody = listOf(
+                            "targetClassName" to targetClassName,
+                            "targetClassPackage" to targetClassPackage,
+                            "targetClassCode" to targetClassCode,
+                            "testClassName" to testFile.nameWithoutExtension,
+                            "testClassCode" to testFile.readText(),
+                            "guidelines" to guidelines,
+                            "dependencies" to dependenciasCodigo,
+                            "scenarios" to (parsedResponse?.scenarios ?: ""),
+                            "failedTestsAndErrors" to errorLines,
+                            "assertionLibrary" to "JUnit"
+                        ).joinToString("&") { (k, v) -> java.net.URLEncoder.encode(k, "UTF-8") + "=" + java.net.URLEncoder.encode(v, "UTF-8") }
+
+                        val retryRequest = java.net.http.HttpRequest.newBuilder()
+                            .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(retryBody))
+                            .build()
+
+                        val client = java.net.http.HttpClient.newHttpClient()
+                        val retryResponse = client.send(retryRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
+                        val updatedTestContent = retryResponse.body().removePrefix("```java").removeSuffix("```").trim()
+
+                        ApplicationManager.getApplication().invokeAndWait {
+                            testFile.writeText(updatedTestContent)
+                            FileDocumentManager.getInstance().reloadFiles(com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByIoFile(testFile)!!)
+                        }
+                        println("[UnitCat] Teste reescrito com base na resposta de /retry.")
+                        println("[UnitCat] Reexecutando testes Maven...")
+                        executarGoalMaven(project, retryCount + 1)
+                    } else {
+                        println("[UnitCat] Nenhum erro '[ERROR]' identificado no log Maven.")
                     }
                 }
-            } else {
-                println("Terminal não disponível no IntelliJ. Execute manualmente o comando:\n$command")
             }
+
+            ApplicationManager.getApplication().invokeAndWait { FileDocumentManager.getInstance().saveAllDocuments() }
+
+            MavenRunConfigurationType.runConfiguration(
+                project,
+                parameters,
+                generalSettings,
+                settings,
+                object : ProgramRunner.Callback {
+                    override fun processStarted(descriptor: RunContentDescriptor) {
+                        val handler = descriptor.processHandler
+                        if (handler != null) {
+                            handler.addProcessListener(processListener)
+                        } else {
+                            println("Erro: ProcessHandler é nulo após o início do processo.")
+                        }
+                    }
+                },
+                false // attachToConsole
+            )
         }
     }
+
 }

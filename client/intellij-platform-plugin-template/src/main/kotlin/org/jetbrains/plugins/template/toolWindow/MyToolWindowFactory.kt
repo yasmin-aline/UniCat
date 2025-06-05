@@ -295,40 +295,56 @@ class MyToolWindowFactory : ToolWindowFactory {
             } else {
                 println("❌ [UnitCat] Falha ao localizar o arquivo virtual para: ${testFile.absolutePath}")
             }
-            // Executa a classe de teste diretamente pela API da IDE
-            val psiClass = com.intellij.psi.JavaPsiFacade.getInstance(project)
-                .findClass("$packageName.$className", com.intellij.psi.search.GlobalSearchScope.projectScope(project))
+            // Executa a classe de teste diretamente pela API da IDE, fazendo lookup de PSI fora do EDT
+            ApplicationManager.getApplication().executeOnPooledThread {
+                val psiClass = com.intellij.openapi.application.ApplicationManager.getApplication().runReadAction<com.intellij.psi.PsiClass?> {
+                    com.intellij.psi.JavaPsiFacade.getInstance(project)
+                        .findClass("$packageName.$className", com.intellij.psi.search.GlobalSearchScope.projectScope(project))
+                }
 
-            if (psiClass != null) {
-                val runManager = com.intellij.execution.RunManager.getInstance(project)
-                val configurationFactory = com.intellij.execution.junit.JUnitConfigurationType.getInstance().configurationFactories[0]
-                val settings = runManager.createConfiguration("$className [UnitCat]", configurationFactory)
-                val configuration = settings.configuration as com.intellij.execution.junit.JUnitConfiguration
+                if (psiClass != null) {
+                    // Agendamos no EDT apenas a criação e execução da configuração
+                    ApplicationManager.getApplication().invokeLater {
+                        val runManager = com.intellij.execution.RunManager.getInstance(project)
+                        val configurationFactory = com.intellij.execution.junit.JUnitConfigurationType.getInstance().configurationFactories[0]
+                        val settings = runManager.createConfiguration("$className [UnitCat]", configurationFactory)
+                        val configuration = settings.configuration as com.intellij.execution.junit.JUnitConfiguration
 
-                configuration.setMainClass(psiClass)
-                configuration.setModule(ModuleManager.getInstance(project).modules.firstOrNull())
+                        configuration.setMainClass(psiClass)
+                        configuration.setModule(ModuleManager.getInstance(project).modules.firstOrNull())
 
-                runManager.addConfiguration(settings)
-                runManager.selectedConfiguration = settings
+                        runManager.addConfiguration(settings)
+                        runManager.selectedConfiguration = settings
 
-                executeConfiguration(
-                    settings,
-                    com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance()
-                )
-                println("🚀 [UnitCat] Classe de teste executada diretamente via JUnit runner.")
-            } else {
-                println("❌ [UnitCat] Não foi possível localizar a classe de teste '$packageName.$className' para execução.")
+                        executeConfiguration(
+                            settings,
+                            com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance()
+                        )
+                        println("🚀 [UnitCat] Classe de teste executada diretamente via JUnit runner.")
+                    }
+                } else {
+                    println("❌ [UnitCat] Não foi possível localizar a classe de teste '$packageName.$className' para execução.")
+                }
+
+                // Depois da execução JUnit, iniciamos o Maven com retryCount=0 em outra invocação no EDT
+                ApplicationManager.getApplication().invokeLater {
+                    println("🕓 [UnitCat] Aguardando MavenProjectsManager carregar projetos")
+                    executarGoalMaven(project, 0)
+                }
             }
-            // Após criar o arquivo de teste, montar o comando para executar os testes
-            println("[UnitCat] Executando testes Maven...")
-            executarGoalMaven(project, 0)
         }
 
 
 
 
         private fun executarGoalMaven(project: Project, retryCount: Int = 0, goal: String = "test") {
-            val mavenProject = org.jetbrains.idea.maven.project.MavenProjectsManager.getInstance(project).projects.firstOrNull() ?: return
+            val mavenProjects = org.jetbrains.idea.maven.project.MavenProjectsManager.getInstance(project).projects
+            println("🔍 [UnitCat] MavenProjectsManager encontrou ${mavenProjects.size} projetos")
+            val mavenProject = mavenProjects.firstOrNull()
+            if (mavenProject == null) {
+                println("❗ [UnitCat] Não há projetos Maven registrados ainda; pulando execução")
+                return
+            }
 
             val projectDirPath = mavenProject.directory
 

@@ -81,6 +81,9 @@ class MyToolWindowFactory : ToolWindowFactory {
         // Propriedade para armazenar o arquivo de teste gerado
         private lateinit var testFile: java.io.File
 
+        // Propriedade para armazenar a estrutura dos métodos de teste: nome -> código
+        private val estruturaDeTestes: MutableMap<String, String> = mutableMapOf()
+
         // Variáveis elevadas para uso em processTerminated
         private var targetClassName: String = ""
         private var targetClassPackage: String = ""
@@ -174,59 +177,41 @@ class MyToolWindowFactory : ToolWindowFactory {
             println("🟡 [UnitCat] Classe alvo: $targetClassName (pacote: $targetClassPackage)")
             println("🟡 [UnitCat] Enviando requisição /init...")
 
-            val body = listOf(
-                "targetClassName" to targetClassName,
-                "targetClassCode" to targetClassCode,
-                "targetClassPackage" to (targetClassPackage ?: "")
-            ).joinToString("&") { (k, v) ->
-                "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+            // Envia requisição apenas para obter dependências do PSI, sem depender do parsing do JSON
+            // Os dados principais já estão em targetClassName, targetClassPackage, targetClassCode
+            // As dependências são obtidas do PSI, se possível
+            val dependenciesMap: Map<String, String> = obterDependenciasDoPsi(project, targetClassPackage, targetClassName)
+            dependenciasCodigo = buscarCodigoDasDependencias(project, dependenciesMap)
+            println("✅ [UnitCat] Códigos das dependências localizados.")
+            println("📄 [UnitCat] Conteúdo das dependências localizadas:\n$dependenciasCodigo")
+
+            guidelines = textArea.text
+
+            // Armazena dependências para uso posterior, se necessário
+            parsedResponse = ParsedInitResponse(
+                scenarios = "",
+                dependenciesMap = dependenciesMap
+            )
+
+            enviarRequisicaoComplete(project)
+        }
+
+        // Novo método para obter dependências do PSI (stub: pode ser aprimorado)
+        private fun obterDependenciasDoPsi(project: Project, pkg: String, className: String): Map<String, String> {
+            // Aqui, você pode implementar lógica para analisar imports do arquivo PSI e obter os FQNs das dependências customizadas
+            // Por simplicidade, retorna vazio neste exemplo
+            val facade = com.intellij.psi.JavaPsiFacade.getInstance(project)
+            val scope = com.intellij.psi.search.GlobalSearchScope.allScope(project)
+            val psiClass = facade.findClass(if (pkg.isNotBlank()) "$pkg.${className.removeSuffix(".java")}" else className.removeSuffix(".java"), scope)
+            if (psiClass != null && psiClass is com.intellij.psi.PsiClassOwner) {
+                val importList = (psiClass.containingFile as? PsiJavaFile)?.importList
+                val customDeps = importList?.allImportStatements?.mapNotNull { it.importReference?.qualifiedName }?.filter {
+                    // Exclui dependências padrão do Java/JUnit
+                    !it.startsWith("org.junit") && !it.startsWith("java.") && !it.startsWith("javax.")
+                } ?: emptyList()
+                return customDeps.associateWith { it }
             }
-            val client = java.net.http.HttpClient.newHttpClient()
-            val request = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create("http://localhost:8080/unitcat/api/init"))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
-                .build()
-            try {
-                val response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-                val responseBody = response.body()
-                println("✅ [UnitCat] Resposta /init recebida.")
-                println("🔍 [UnitCat] Status da resposta: ${response.statusCode()}")
-                println("📦 [UnitCat] JSON bruto recebido: $responseBody")
-
-                // Novo parsing da resposta usando Jackson e o novo contrato DTO
-                val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
-                val initResponse = objectMapper.readValue(responseBody, InitResponseDTO::class.java)
-
-                println("🔍 [UnitCat] Campos analysisResponseDTO:")
-                println("  classFqn: ${initResponse.analysisResponseDTO.classFqn}")
-                println("  purposeSummary: ${initResponse.analysisResponseDTO.purposeSummary}")
-                println("  mainMethodSignature: ${initResponse.analysisResponseDTO.mainMethodSignature}")
-                println("  inputType: ${initResponse.analysisResponseDTO.inputType}")
-                println("  outputType: ${initResponse.analysisResponseDTO.outputType}")
-                println("📦 [UnitCat] Lista de customDependencies (${initResponse.customDependencies.size}):")
-                initResponse.customDependencies.forEachIndexed { idx, dep ->
-                    println("  [$idx] $dep")
-                }
-
-                parsedResponse = ParsedInitResponse(
-                    scenarios = "", // Cenários devem ser extraídos de outro lugar se ainda forem usados
-                    dependenciesMap = initResponse.customDependencies.associateWith { it }
-                )
-
-                println("📦 [UnitCat] Dependências mapeadas: ${parsedResponse?.dependenciesMap?.size ?: 0}")
-                dependenciasCodigo = buscarCodigoDasDependencias(project, parsedResponse?.dependenciesMap ?: emptyMap())
-                println("✅ [UnitCat] Códigos das dependências localizados.")
-                println("📄 [UnitCat] Conteúdo das dependências localizadas:\n$dependenciasCodigo")
-
-                guidelines = textArea.text
-
-                enviarRequisicaoComplete(project)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                println("❌ [UnitCat] Erro ao enviar requisição /init: ${e.message}")
-                // Tratar erro de rede/exceção
-            }
+            return emptyMap()
         }
 
         private fun enviarRequisicaoComplete(project: Project) {
@@ -237,7 +222,7 @@ class MyToolWindowFactory : ToolWindowFactory {
             println("targetClassCode (truncado) = ${targetClassCode.take(100)}...")
             println("targetClassPackage = $targetClassPackage")
             println("guidelines = ${guidelines.take(100)}...")
-            println("dependenciesName = ${parsedResponse?.dependenciesMap?.values?.joinToString(",")}")
+            println("dependenciesName = ${(parsedResponse?.dependenciesMap?.values?.joinToString(",") ?: "")}")
 
             val completeRequestBody = listOf(
                 "targetClassName" to targetClassName,
@@ -296,6 +281,112 @@ class MyToolWindowFactory : ToolWindowFactory {
             // Escreve o conteúdo no arquivo
             testFile.writeText(testClassContent)
             println("✅ [UnitCat] Arquivo salvo com sucesso.")
+
+            // --- NOVO PARSER: dividir header, testMethods (@Test), footer ---
+            val lines = testClassContent.lines()
+            val headerLines = mutableListOf<String>()
+            val footerLines = mutableListOf<String>()
+            val currentMethod = StringBuilder()
+            var insideTestMethod = false
+            var currentMethodName = ""
+            val testMethods = mutableMapOf<String, String>()
+            var braceBalance = 0
+            var foundFirstTest = false
+            val testAnnotationRegex = Regex("""^\s*@Test""")
+            val methodHeaderRegex = Regex("""\s*void\s+(\w+)\s*\(\)\s*\{""")
+
+            var i = 0
+            while (i < lines.size) {
+                val line = lines[i]
+                if (!foundFirstTest && testAnnotationRegex.containsMatchIn(line)) {
+                    foundFirstTest = true
+                }
+
+                if (!foundFirstTest) {
+                    headerLines.add(line)
+                    i++
+                    continue
+                }
+
+                if (testAnnotationRegex.containsMatchIn(line)) {
+                    insideTestMethod = true
+                    currentMethod.clear()
+                    // Captura anotações imediatamente acima
+                    var annotationStartIdx = i
+                    while (annotationStartIdx > 0 && lines[annotationStartIdx - 1].trim().startsWith("@")) {
+                        annotationStartIdx--
+                    }
+                    for (j in annotationStartIdx..i) {
+                        currentMethod.appendLine(lines[j])
+                    }
+                    braceBalance = 0
+                    // Agora, avançar para capturar o cabeçalho do método e corpo
+                    i++
+                    // Captura linhas até encontrar o método (void ... {)
+                    var methodHeaderFound = false
+                    while (i < lines.size && !methodHeaderFound) {
+                        val l = lines[i]
+                        currentMethod.appendLine(l)
+                        if (l.contains("{")) {
+                            braceBalance += l.count { it == '{' }
+                            braceBalance -= l.count { it == '}' }
+                            methodHeaderFound = true
+                        }
+                        i++
+                    }
+                    // Agora, capturar corpo do método até fechar todos os braces
+                    while (i < lines.size && braceBalance > 0) {
+                        val l = lines[i]
+                        currentMethod.appendLine(l)
+                        if ("{" in l) braceBalance += l.count { it == '{' }
+                        if ("}" in l) braceBalance -= l.count { it == '}' }
+                        i++
+                    }
+                    // Após sair do loop, já temos o método completo
+                    val methodText = currentMethod.toString()
+                    val nameMatch = methodHeaderRegex.find(methodText)
+                    val name = nameMatch?.groups?.get(1)?.value ?: "unknown"
+                    testMethods[name] = methodText.trim()
+                    insideTestMethod = false
+                    continue
+                }
+
+                if (!insideTestMethod) {
+                    footerLines.add(line)
+                }
+                i++
+            }
+
+            val header = headerLines.joinToString("\n")
+            val footer = footerLines.joinToString("\n")
+
+            // Salva estrutura
+            estruturaDeTestes.clear()
+            estruturaDeTestes.putAll(testMethods)
+
+            // 🧩 [UnitCat] Estrutura de testes populada com os seguintes métodos:
+            println("🧩 [UnitCat] Estrutura de testes populada com os seguintes métodos:")
+            estruturaDeTestes.forEach { (nome, codigo) ->
+                println("  🔹 $nome -> ${codigo.lines().firstOrNull()?.take(100)}...")
+            }
+
+            // --- Reconstruir classe usando header, estruturaDeTestes, footer ---
+            val rebuiltClass = buildString {
+                appendLine(header.trim())
+                appendLine()
+                // Para cada método, adiciona o corpo completo exatamente como gerado
+                estruturaDeTestes.values.forEach { methodCode ->
+                    appendLine(methodCode)
+                    appendLine()
+                }
+                appendLine(footer.trim())
+            }
+            testFile.writeText(rebuiltClass)
+
+            // 📄 [UnitCat] Classe de teste reconstruída com base na estrutura interna. Conteúdo inicial:
+            println("📄 [UnitCat] Classe de teste reconstruída com base na estrutura interna. Conteúdo inicial:")
+            println(rebuiltClass.lines().take(20).joinToString("\n"))
+
             // Abre a classe criada automaticamente no editor
             val newVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
                 .refreshAndFindFileByIoFile(testFile)
@@ -342,20 +433,17 @@ class MyToolWindowFactory : ToolWindowFactory {
         private fun executarGoalMaven(project: Project, retryCount: Int = 0, goal: String = "test") {
             val mavenProject = org.jetbrains.idea.maven.project.MavenProjectsManager.getInstance(project).projects.firstOrNull() ?: return
 
-            // Assegura que `mavenProject.directory` seja uma String de caminho.
-            // O MavenRunnerParameters espera uma String.
             val projectDirPath = mavenProject.directory
 
             val parameters = MavenRunnerParameters(
                 true,
                 projectDirPath,
-                null as String?,           // pomFileName (o `null as String?` é redundante aqui, `null` já funciona)
-                listOf(goal),   // goals
-                emptyList()     // explicitEnabledProfiles
+                null as String?,
+                listOf(goal),
+                emptyList()
             )
 
             val settings = MavenRunnerSettings()
-
             val generalSettings: MavenGeneralSettings? = null
 
             val outputStream = ByteArrayOutputStream()
@@ -369,7 +457,8 @@ class MyToolWindowFactory : ToolWindowFactory {
                 }
                 override fun processTerminated(event: ProcessEvent) {
                     super.processTerminated(event)
-                    // Verificação do limite de tentativas de retry
+                    // LOG 1: Antes da verificação de retryCount
+                    println("🔁 [UnitCat] Iniciando execução do Maven com retryCount = $retryCount")
                     if (retryCount >= 3) {
                         println("🔁 [UnitCat] Limite de 3 tentativas de retry atingido.")
                         return
@@ -377,19 +466,46 @@ class MyToolWindowFactory : ToolWindowFactory {
                     val logContent = outputStream.toString(Charsets.UTF_8.name())
                     println("📜 [UnitCat] Logs Maven capturados.")
 
-                    // NOVO: Exibir lista de erros de teste antes do log final do Maven
-                    // Novo: Buscar a lista de erros da instância global (garante que seja a mesma do listener)
-                    val errosDeTesteFinal = MyToolWindowFactory.errosDeTesteGlobal
+                    // Coleta erros de teste da execução local (não global)
+                    val errosDeTesteFinal = errosDeTeste.toList()
+                    // Limpa a lista de erros para próxima execução
+                    errosDeTeste.clear()
 
-                    println("📋 [UnitCat] Lista final de testes com falha:")
-                    errosDeTesteFinal.forEachIndexed { index, erro ->
-                        println("🔹 Erro ${index + 1}:")
-                        println("   Método real: ${erro["nomeMetodo"]}")
-                        println("   DisplayName: ${erro["displayName"]}")
-                        println("   Mensagem de erro: ${erro["mensagemErro"]?.take(300)}")
-                        println("   Stacktrace: ${erro["stacktrace"]?.take(300)}")
-                        println("   Código do método:\n${erro["codigoMetodo"]?.take(1000)}")
-                        println("----------------------------------------------------")
+                    // Serializa a lista de erros como JSON
+                    val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+                    println("📋 [UnitCat] Estrutura de dados completa dos testes com falha:")
+                    println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(errosDeTesteFinal))
+
+                    println("🔁 [UnitCat] Enviando requisição /retry com ${errosDeTesteFinal.size} testes falhos...")
+                    // LOG 2: Antes de construir corpo da requisição retry
+                    println("🔁 [UnitCat] Construindo corpo da requisição /retry...")
+                    // Recupera novamente o conteúdo da classe de teste do PSI, se possível, ou do arquivo salvo
+                    val testClassCodeAtual: String = try {
+                        val vFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByIoFile(testFile)
+                        if (vFile != null) {
+                            val doc = FileDocumentManager.getInstance().getDocument(vFile)
+                            doc?.text ?: testFile.readText()
+                        } else {
+                            testFile.readText()
+                        }
+                    } catch (e: Exception) {
+                        testFile.readText()
+                    }
+
+                    val formParams = mutableListOf<Pair<String, String>>(
+                        "targetClassName" to targetClassName,
+                        "targetClassPackage" to targetClassPackage,
+                        "targetClassCode" to targetClassCode,
+                        "testClassCode" to testClassCodeAtual,
+                        "dependencies" to dependenciasCodigo,
+                        "dependenciesName" to (parsedResponse?.dependenciesMap?.values?.joinToString(",") ?: "")
+                    )
+                    // Serializa erros como JSON e adiciona ao formParams
+                    val failingTestsJson = objectMapper.writeValueAsString(errosDeTesteFinal)
+                    formParams.add("failingTestDetailsRequestDTOS" to failingTestsJson)
+
+                    val retryRequestBody = formParams.joinToString("&") { (key, value) ->
+                        "${java.net.URLEncoder.encode(key, "UTF-8")}=${java.net.URLEncoder.encode(value, "UTF-8")}"
                     }
 
                     println("✅ [UnitCat] Processo Maven finalizado (código: ${event.exitCode})")
@@ -398,9 +514,56 @@ class MyToolWindowFactory : ToolWindowFactory {
                         .filter { it.contains("[ERROR]") || it.contains("COMPILATION ERROR") || it.contains("BUILD FAILURE") }
                         .joinToString("\n")
 
-                    // Desativa o retry automático e impede sobrescrita do arquivo de teste em caso de erro
-                    if (errorLines.isNotBlank()) {
-                        return
+                    // NOVO TRECHO: Mostra mensagem apropriada, mas SEM retornar, sempre chama o endpoint /retry
+                    if (errorLines.isNotEmpty()) {
+                        println("❌ [UnitCat] Foram encontrados erros '[ERROR]' no log Maven.")
+                        // LOG 3: Antes de criar o retryRequest
+                        println("🔁 [UnitCat] Enviando requisição HTTP para /retry...")
+                        // Chamada HTTP para o endpoint /retry com application/x-www-form-urlencoded
+                        val retryRequest = java.net.http.HttpRequest.newBuilder()
+                            .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(retryRequestBody))
+                            .build()
+                        try {
+                            val retryResponse = java.net.http.HttpClient.newHttpClient()
+                                .send(retryRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
+                            println("✅ [UnitCat] Resposta /retry recebida:")
+                            println("📦 [UnitCat] Conteúdo:\n${retryResponse.body()}")
+
+                            // 🔧 [UnitCat] Atualizando métodos da classe de teste com base na resposta /retry
+                            val responseJson = retryResponse.body()
+                            // LOG 4: Após parsear o JSON de resposta
+                            val retryResultNode = objectMapper.readTree(responseJson)
+                            println("🔁 [UnitCat] Resposta JSON de /retry parseada com sucesso.")
+                            // ===== INÍCIO: Atualiza métodos da classe de teste diretamente com base na resposta /retry =====
+                            val modifiedMethods = retryResultNode.get("modifiedTestMethods")
+                            val modifiedMethodsList = mutableListOf<Pair<String, String>>()
+                            modifiedMethods?.forEach { methodNode ->
+                                val methodName = methodNode.get("methodName").asText()
+                                val modifiedCode = methodNode.get("modifiedCode").asText().trim()
+                                modifiedMethodsList.add(methodName to modifiedCode)
+                                println("🔁 [UnitCat] Método '${methodName}' recebido para substituição.")
+                            }
+                            substituirMetodosNoArquivo(testFile, modifiedMethodsList)
+                            println("📄 [UnitCat] Classe de teste atualizada com métodos do /retry.")
+                            val requiredImports = retryResultNode.get("requiredNewImports")
+                            println("🔁 [UnitCat] Quantidade de métodos modificados recebidos: ${modifiedMethods?.size() ?: 0}")
+                            println("🔁 [UnitCat] Quantidade de novos imports recebidos: ${requiredImports?.size() ?: 0}")
+                            ApplicationManager.getApplication().invokeLater {
+                                com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
+                                    val document = FileDocumentManager.getInstance().getDocument(
+                                        com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByIoFile(testFile)!!
+                                    )!!
+                                    val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document)
+                                    // (manipulação de imports pode ser feita aqui futuramente)
+                                }
+                            }
+
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            println("❌ [UnitCat] Falha ao chamar o endpoint /retry: ${e.message}")
+                        }
                     } else {
                         println("✅ [UnitCat] Nenhum erro '[ERROR]' identificado no log Maven.")
                     }
@@ -424,7 +587,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                         }
                     }
                 },
-                false // attachToConsole
+                false
             )
         }
     }
@@ -491,4 +654,79 @@ class MyToolWindowFactory : ToolWindowFactory {
         val errosDeTesteGlobal: MutableList<Map<String, String>> = mutableListOf()
     }
 }
+/**
+ * Substitui diretamente os métodos @Test no arquivo de teste com base no nome dos métodos.
+ * @param testFile Arquivo da classe de teste.
+ * @param novosMetodos Lista de pares (nome, código completo do método incluindo assinatura e corpo) dos métodos a serem substituídos.
+ */
+private fun substituirMetodosNoArquivo(testFile: java.io.File, novosMetodos: List<Pair<String, String>>) {
+    if (novosMetodos.isEmpty()) return
+    val conteudoOriginal = testFile.readText()
+    val linhas = conteudoOriginal.lines()
+    val testAnnotationRegex = Regex("""^\s*@Test""")
+    val methodHeaderRegex = Regex("""\s*void\s+(\w+)\s*\(\)\s*\{""")
+    val novosMetodosMap = novosMetodos.toMap()
 
+    val resultado = mutableListOf<String>()
+    var i = 0
+    while (i < linhas.size) {
+        val linha = linhas[i]
+        if (testAnnotationRegex.containsMatchIn(linha)) {
+            // Encontrou início de método @Test
+            val anotacoes = mutableListOf<String>()
+            var annotationStartIdx = i
+            while (annotationStartIdx > 0 && linhas[annotationStartIdx - 1].trim().startsWith("@")) {
+                annotationStartIdx--
+            }
+            for (j in annotationStartIdx..i) {
+                anotacoes.add(linhas[j])
+            }
+
+            // Avança para o cabeçalho do método
+            var j = i + 1
+            val metodoBuilder = StringBuilder()
+            anotacoes.forEach { metodoBuilder.appendLine(it) }
+            var braceBalance = 0
+            var headerFound = false
+            while (j < linhas.size && !headerFound) {
+                val l = linhas[j]
+                metodoBuilder.appendLine(l)
+                if (l.contains("{")) {
+                    braceBalance += l.count { it == '{' }
+                    braceBalance -= l.count { it == '}' }
+                    headerFound = true
+                }
+                j++
+            }
+
+            // Captura corpo do método
+            while (j < linhas.size && braceBalance > 0) {
+                val l = linhas[j]
+                metodoBuilder.appendLine(l)
+                if ("{" in l) braceBalance += l.count { it == '{' }
+                if ("}" in l) braceBalance -= l.count { it == '}' }
+                j++
+            }
+
+            val metodoOriginal = metodoBuilder.toString()
+            val nomeMetodo = methodHeaderRegex.find(metodoOriginal)?.groups?.get(1)?.value
+            if (nomeMetodo != null && novosMetodosMap.containsKey(nomeMetodo)) {
+                val novoMetodoCompleto = novosMetodosMap[nomeMetodo]!!
+                resultado.addAll(novoMetodoCompleto.lines())
+                resultado.add("") // separador visual
+                println("🔁 [UnitCat] Método '$nomeMetodo' substituído diretamente no arquivo.")
+            } else {
+                resultado.addAll(metodoOriginal.lines())
+                resultado.add("")
+            }
+            i = j
+            continue
+        }
+
+        // Linha normal fora de @Test
+        resultado.add(linha)
+        i++
+    }
+
+    testFile.writeText(resultado.joinToString("\n"))
+}

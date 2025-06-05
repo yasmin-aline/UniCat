@@ -1,7 +1,6 @@
 package br.com.unicat.poc.usecases;
 
 import br.com.unicat.poc.adapter.gateway.B3GPTGateway;
-import br.com.unicat.poc.adapter.http.dtos.request.FailingTestDetailsRequestDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.RefactoredTestCodeResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.RefactoredUnitTestResponseDTO;
 import br.com.unicat.poc.entities.RefactoredUnitTests;
@@ -14,8 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -24,7 +21,7 @@ public class RefactorFailingUnitTestsUseCase implements RefactorFailingUnitTests
   private final B3GPTGateway b3gptGateway;
 
   @Override
-  public RefactoredUnitTestResponseDTO execute(final String dependenciesName, final String dependencies, final String testClassCode, final List<FailingTestDetailsRequestDTO> failingTestDetailsRequestDTOS) throws Exception {
+  public RefactoredUnitTestResponseDTO execute(final String dependenciesName, final String dependencies, final String testClassCode, final String failingTestDetailsRequestDTOS) throws Exception {
     log.info("INIT RefactorFailingUnitTestsUseCase execute. failingTestDetailsRequestDTOS: {}", failingTestDetailsRequestDTOS);
 
     ObjectMapper mapper = new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);

@@ -32,7 +32,8 @@ public class CompleteUnitTestsCreationUseCase implements CompleteUnitTestsCreati
         final var prompt = this.generateUnitTestsPromptGenerator.get(
             requestDTO.dependenciesName(),
             requestDTO.dependencies(),
-            testScenariosJson
+            testScenariosJson,
+            requestDTO.guidelines()
         );
 
         final var chatResponse = this.gateway.callAPI(prompt);

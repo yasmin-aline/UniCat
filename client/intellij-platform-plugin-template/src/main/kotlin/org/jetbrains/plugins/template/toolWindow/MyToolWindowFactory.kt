@@ -312,7 +312,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                 scope
             )
             if (psiClass != null && psiClass is com.intellij.psi.PsiClassOwner) {
-                val importList = (psiClass.containingFile as? PsiJavaFile)?.importList
+                val importList = (psiClass.getContainingFile() as? PsiJavaFile)?.importList
                 val customDeps = importList?.allImportStatements?.mapNotNull { it.importReference?.qualifiedName }
                     ?.filter {
                         !it.startsWith("org.junit") && !it.startsWith("java.") && !it.startsWith("javax.")

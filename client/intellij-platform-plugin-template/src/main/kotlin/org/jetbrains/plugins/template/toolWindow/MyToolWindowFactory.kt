@@ -356,8 +356,8 @@ class MyToolWindowFactory : ToolWindowFactory {
                     super.processTerminated(event)
                     // LOG 1: Antes da verificação de retryCount
                     println("🔁 [UnitCat] Iniciando execução do Maven com retryCount = $retryCount")
-                    if (retryCount >= 3) {
-                        println("🔁 [UnitCat] Limite de 3 tentativas de retry atingido.")
+                    if (retryCount >= 5) {
+                        println("🔁 [UnitCat] Limite de 5 tentativas de retry atingido.")
                         return
                     }
                     val logContent = outputStream.toString(Charsets.UTF_8.name())
@@ -437,6 +437,8 @@ class MyToolWindowFactory : ToolWindowFactory {
                             // Substitui diretamente métodos com base na nova lógica
                             substituirMetodosNoArquivo(testFile, retryResponse.body())
                             println("📄 [UnitCat] Classe de teste atualizada com métodos do /retry.")
+                            // Executa novamente o Maven para revalidar os testes após o retry
+                            executarGoalMaven(project, retryCount + 1)
                             val modifiedMethods = retryResultNode.get("modifiedTestMethods")
                             val requiredImports = retryResultNode.get("requiredNewImports")
                             println("🔁 [UnitCat] Quantidade de métodos modificados recebidos: ${modifiedMethods?.size() ?: 0}")

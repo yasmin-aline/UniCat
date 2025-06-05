@@ -24,13 +24,16 @@ import org.jetbrains.idea.maven.execution.MavenRunnerParameters
 import org.jetbrains.idea.maven.execution.MavenRunnerSettings
 import org.jetbrains.idea.maven.project.MavenGeneralSettings
 import java.awt.Color
-// import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.RenderingHints
 import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.swing.*
+import javax.swing.text.DefaultEditorKit
+import javax.swing.text.SimpleAttributeSet
+import javax.swing.text.StyleConstants
+import javax.swing.text.StyledDocument
 
 private data class ParsedInitResponse(
     val scenarios: String,
@@ -67,18 +70,46 @@ class MyToolWindowFactory : ToolWindowFactory {
         private var dependenciasCodigo: String = ""
         private var parsedResponse: ParsedInitResponse? = null
         private val errosDeTeste: MutableList<Map<String, String>> = mutableListOf()
-        private lateinit var logsArea: JTextArea
 
         private fun appendLog(message: String) {
             ApplicationManager.getApplication().invokeLater {
-                if (::logsArea.isInitialized) {
-                    logsArea.append(message + "\n")
-                    logsArea.caretPosition = logsArea.document.length
+                val paneField = this::class.java.getDeclaredField("logsPane")
+                paneField.isAccessible = true
+                val logsPaneInstance = paneField.get(this) as JTextPane
+                val doc = logsPaneInstance.styledDocument as StyledDocument
+
+                val closingBracketIndex = message.indexOf("]") + 1
+                val rawType = if (closingBracketIndex > 0) message.substring(1, closingBracketIndex - 1).trim() else ""
+                val restOfMessage = if (closingBracketIndex > 0) message.substring(closingBracketIndex) else message
+
+                val fieldWidth = 10
+
+                val defaultAttr = SimpleAttributeSet().also {
+                    StyleConstants.setForeground(it, JBColor.BLACK)
                 }
+                val typeAttr = SimpleAttributeSet().also {
+                    when {
+                        rawType.equals("INFO", ignoreCase = true) -> StyleConstants.setForeground(it, JBColor.BLUE)
+                        rawType.equals("ERROR", ignoreCase = true) -> StyleConstants.setForeground(it, JBColor.RED)
+                        rawType.equals("PROCESSING", ignoreCase = true) -> StyleConstants.setForeground(it, JBColor.YELLOW)
+                        else -> StyleConstants.setForeground(it, JBColor.WHITE)
+                    }
+                }
+
+                doc.insertString(doc.length, "[", defaultAttr)
+                doc.insertString(doc.length, rawType, typeAttr)
+                val paddingCount = (fieldWidth - rawType.length).coerceAtLeast(0)
+                val padding = " ".repeat(paddingCount)
+                doc.insertString(doc.length, "$padding]", defaultAttr)
+                doc.insertString(doc.length, " $restOfMessage\n", defaultAttr)
+
+                logsPaneInstance.caretPosition = doc.length
             }
         }
 
         fun getContent() = buildUI()
+
+        private lateinit var logsPane: JTextPane
 
         private fun buildUI() = JBPanel<JBPanel<*>>().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -88,8 +119,9 @@ class MyToolWindowFactory : ToolWindowFactory {
                 preferredSize = Dimension(200, 40)
                 maximumSize = Dimension(Int.MAX_VALUE, 40)
                 background = JBColor(Color(152, 251, 152), Color(152, 251, 152))
-                foreground = JBColor.WHITE
+                isContentAreaFilled = true
                 isOpaque = true
+                foreground = JBColor.BLACK
                 font = font.deriveFont(java.awt.Font.BOLD, 14f)
                 alignmentX = Component.LEFT_ALIGNMENT
                 border = BorderFactory.createCompoundBorder(
@@ -122,7 +154,7 @@ class MyToolWindowFactory : ToolWindowFactory {
             add(Box.createVerticalStrut(24))
 
             val monitorLabel = JBLabel("Monitor de atividades").apply {
-                font = font.deriveFont(java.awt.Font.BOLD, 12f)
+                font = font.deriveFont(java.awt.Font.BOLD, 14f)
                 alignmentX = Component.LEFT_ALIGNMENT
                 border = BorderFactory.createEmptyBorder(
                     0,
@@ -130,18 +162,21 @@ class MyToolWindowFactory : ToolWindowFactory {
                     0,
                     gerarTestsButton.margin.right
                 )
+                foreground = JBColor.BLACK
             }
             add(monitorLabel)
             add(Box.createVerticalStrut(12))
 
-            logsArea = JTextArea(6, 30).apply {
+            val logsPane = JTextPane().apply {
                 isEditable = false
                 background = JBColor(Color(0x1B1B1B), Color(0x1B1B1B))
-                foreground = JBColor.WHITE
-                border = BorderFactory.createLineBorder(JBColor.LIGHT_GRAY)
-                font = font.deriveFont(12f)
+                caretColor = JBColor.BLACK
+                styledDocument.putProperty(DefaultEditorKit.EndOfLineStringProperty, "\n")
+                this.font = this.font.deriveFont(14f)
+                this.foreground = JBColor.BLACK
             }
-            val logsScroll = JScrollPane(logsArea).apply {
+            this@MyToolWindow.logsPane = logsPane
+            val logsScroll = JScrollPane(logsPane).apply {
                 horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
                 verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_NEVER
                 preferredSize = Dimension(Short.MAX_VALUE.toInt(), 300)
@@ -171,6 +206,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                     0,
                     gerarTestsButton.margin.right
                 )
+                foreground = JBColor.BLACK
             }
             add(diretrizesLabel)
 
@@ -181,7 +217,9 @@ class MyToolWindowFactory : ToolWindowFactory {
                 wrapStyleWord = true
                 border = BorderFactory.createLineBorder(JBColor.LIGHT_GRAY)
                 font = font.deriveFont(12f)
+                foreground = JBColor.BLACK
             }
+            
             val diretrizesScroll = JScrollPane(diretrizesArea).apply {
                 horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
                 verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_NEVER
@@ -195,7 +233,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                         0,
                         gerarTestsButton.margin.right
                     ),
-                    BorderFactory.createLineBorder(JBColor.LIGHT_GRAY)
+                    BorderFactory.createLineBorder(JBColor.WHITE)
                 )
             }
             add(diretrizesScroll)
@@ -207,11 +245,13 @@ class MyToolWindowFactory : ToolWindowFactory {
             if (editor != null) {
                 val document = editor.document
                 val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document)
+                appendLog("[INFO      ] Editor identificado. Arquivo ativo: ${psiFile?.virtualFile?.path}")
                 if (psiFile is PsiJavaFile) {
                     if (psiFile.name.contains("Test", ignoreCase = true)) {
                         appendLog("[WARNING     ] Arquivo com nome 'Test' detectado. Operação cancelada para evitar autoanálise.")
                         return
                     }
+                    appendLog("[INFO      ] Iniciando análise da classe '${psiFile.name}' para geração de testes.")
                     targetClassName = psiFile.name
                     targetClassPackage = psiFile.packageName
                     targetClassCode = document.text
@@ -244,6 +284,7 @@ class MyToolWindowFactory : ToolWindowFactory {
 
             val dependenciesMap: Map<String, String> =
                 obterDependenciasDoPsi(project, targetClassPackage, targetClassName)
+            appendLog("[INFO      ] Dependências encontradas (${dependenciesMap.size}): ${dependenciesMap.keys.joinToString(",")}")
             dependenciasCodigo = buscarCodigoDasDependencias(project, dependenciesMap)
             appendLog("[INFO      ] Códigos das dependências localizadas.")
             appendLog("[INFO      ] Conteúdo das dependências localizadas:\n$dependenciasCodigo")
@@ -254,6 +295,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                 dependenciesMap = dependenciesMap
             )
 
+            appendLog("[INFO      ] Enviando dados de guidelines com tamanho ${guidelines.length} caracteres.")
             enviarRequisicaoComplete(project)
         }
 
@@ -299,6 +341,7 @@ class MyToolWindowFactory : ToolWindowFactory {
             ).joinToString("&") { (k, v) ->
                 "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
             }
+            appendLog("[INFO      ] Payload completo para /complete possui ${completeRequestBody.length} caracteres.")
             val client = java.net.http.HttpClient.newHttpClient()
             val completeRequest = java.net.http.HttpRequest.newBuilder()
                 .uri(java.net.URI.create("http://localhost:8080/unitcat/api/complete"))
@@ -310,6 +353,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                     completeRequest,
                     java.net.http.HttpResponse.BodyHandlers.ofString()
                 )
+                appendLog("[INFO      ] Código de status HTTP de /complete: ${completeResponse.statusCode()}")
                 val objectMapper = jacksonObjectMapper()
                 val completeResponseDTO = objectMapper.readValue(
                     completeResponse.body(),
@@ -348,9 +392,11 @@ class MyToolWindowFactory : ToolWindowFactory {
             val classNameRegex = Regex("""class\s+(\w+)""")
             val match = classNameRegex.find(testClassContent)
             val className = match?.groups?.get(1)?.value ?: "GeneratedTest"
+            appendLog("[INFO      ] Nome da classe de teste gerada: $className")
             testFile = File(testRoot, "$className.java")
             appendLog("[INFO      ] Salvando classe de teste em: ${testFile.absolutePath}")
             testFile.writeText(testClassContent)
+            appendLog("[INFO      ] Conteúdo da nova classe de teste possui ${testClassContent.length} caracteres.")
             appendLog("[INFO      ] Arquivo salvo com sucesso.")
 
             val newVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
@@ -448,7 +494,6 @@ class MyToolWindowFactory : ToolWindowFactory {
                 var inMethod = false
                 val methodSignatureRegex =
                     Regex("""^\s*(?:public|private|protected|static|\s)*\s*\w+\s+(\w+)\s*\(.*\)\s*(?:throws\s+[\w.,\s]+)?\s*\{\s*$""")
-//                Regex("""^\s*(?:public|private|protected|static|\s)*\s*\w+\s+(\w+)\s*\(.*\)\s*(?:throws\s+[\w\.,\s]+)?\s*\{\s*$""")
                 val searchStartIndex =
                     if (importBlockEndIndex != -1) importBlockEndIndex + 1 else if (packageLine != null) 1 else 0
 
@@ -548,8 +593,10 @@ class MyToolWindowFactory : ToolWindowFactory {
             try {
                 val updates = objectMapper.readValue<UpdatePayload>(updatesJson)
                 val original = testFile.readText()
+                appendLog("[INFO      ] Tamanho do arquivo original para refatoração: ${original.length} caracteres.")
                 val updated = refactorTestClass(original, updates)
                 testFile.writeText(updated)
+                appendLog("[INFO      ] Tamanho do arquivo refatorado: ${updated.length} caracteres.")
                 appendLog("[INFO      ] Classe Java atualizada com sucesso com base no JSON do /retry.")
             } catch (e: Exception) {
                 appendLog("[ERROR     ] Erro ao processar JSON de atualização: ${e.message}")
@@ -571,6 +618,7 @@ class MyToolWindowFactory : ToolWindowFactory {
             }
 
             val projectDirPath = mavenProject.directory
+            appendLog("[INFO      ] Diretório do projeto Maven: $projectDirPath")
 
             val parameters = MavenRunnerParameters(
                 true,
@@ -587,6 +635,7 @@ class MyToolWindowFactory : ToolWindowFactory {
             val processListener = object : ProcessAdapter() {
                 override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
                     super.onTextAvailable(event, outputType)
+                    appendLog("[INFO      ] Saída Maven: ${event.text.trim()}")
                     outputStream.write(event.text.toByteArray())
                 }
 
@@ -599,6 +648,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                     }
                     val logContent = outputStream.toString(Charsets.UTF_8.name())
                     appendLog("[INFO      ] Logs Maven capturados.")
+                    appendLog("[INFO      ] Conteúdo completo do log Maven: \n$logContent")
 
                     val errosDeTesteFinal = errosDeTeste.toList()
                     errosDeTeste.clear()
@@ -675,6 +725,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                         }
                     } else {
                         appendLog("[INFO      ] Nenhum erro '[ERROR]' identificado no log Maven.")
+                        appendLog("[INFO      ] Build Maven bem-sucedido, sem falhas nos testes.")
                     }
                 }
             }

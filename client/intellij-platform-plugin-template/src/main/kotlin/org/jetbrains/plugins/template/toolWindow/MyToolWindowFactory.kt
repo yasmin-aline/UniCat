@@ -1,5 +1,7 @@
 package org.jetbrains.plugins.template.toolWindow
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.intellij.execution.ProgramRunnerUtil.executeConfiguration
 import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
@@ -282,111 +284,6 @@ class MyToolWindowFactory : ToolWindowFactory {
             testFile.writeText(testClassContent)
             println("✅ [UnitCat] Arquivo salvo com sucesso.")
 
-            // --- NOVO PARSER: dividir header, testMethods (@Test), footer ---
-            val lines = testClassContent.lines()
-            val headerLines = mutableListOf<String>()
-            val footerLines = mutableListOf<String>()
-            val currentMethod = StringBuilder()
-            var insideTestMethod = false
-            var currentMethodName = ""
-            val testMethods = mutableMapOf<String, String>()
-            var braceBalance = 0
-            var foundFirstTest = false
-            val testAnnotationRegex = Regex("""^\s*@Test""")
-            val methodHeaderRegex = Regex("""\s*void\s+(\w+)\s*\(\)\s*\{""")
-
-            var i = 0
-            while (i < lines.size) {
-                val line = lines[i]
-                if (!foundFirstTest && testAnnotationRegex.containsMatchIn(line)) {
-                    foundFirstTest = true
-                }
-
-                if (!foundFirstTest) {
-                    headerLines.add(line)
-                    i++
-                    continue
-                }
-
-                if (testAnnotationRegex.containsMatchIn(line)) {
-                    insideTestMethod = true
-                    currentMethod.clear()
-                    // Captura anotações imediatamente acima
-                    var annotationStartIdx = i
-                    while (annotationStartIdx > 0 && lines[annotationStartIdx - 1].trim().startsWith("@")) {
-                        annotationStartIdx--
-                    }
-                    for (j in annotationStartIdx..i) {
-                        currentMethod.appendLine(lines[j])
-                    }
-                    braceBalance = 0
-                    // Agora, avançar para capturar o cabeçalho do método e corpo
-                    i++
-                    // Captura linhas até encontrar o método (void ... {)
-                    var methodHeaderFound = false
-                    while (i < lines.size && !methodHeaderFound) {
-                        val l = lines[i]
-                        currentMethod.appendLine(l)
-                        if (l.contains("{")) {
-                            braceBalance += l.count { it == '{' }
-                            braceBalance -= l.count { it == '}' }
-                            methodHeaderFound = true
-                        }
-                        i++
-                    }
-                    // Agora, capturar corpo do método até fechar todos os braces
-                    while (i < lines.size && braceBalance > 0) {
-                        val l = lines[i]
-                        currentMethod.appendLine(l)
-                        if ("{" in l) braceBalance += l.count { it == '{' }
-                        if ("}" in l) braceBalance -= l.count { it == '}' }
-                        i++
-                    }
-                    // Após sair do loop, já temos o método completo
-                    val methodText = currentMethod.toString()
-                    val nameMatch = methodHeaderRegex.find(methodText)
-                    val name = nameMatch?.groups?.get(1)?.value ?: "unknown"
-                    testMethods[name] = methodText.trim()
-                    insideTestMethod = false
-                    continue
-                }
-
-                if (!insideTestMethod) {
-                    footerLines.add(line)
-                }
-                i++
-            }
-
-            val header = headerLines.joinToString("\n")
-            val footer = footerLines.joinToString("\n")
-
-            // Salva estrutura
-            estruturaDeTestes.clear()
-            estruturaDeTestes.putAll(testMethods)
-
-            // 🧩 [UnitCat] Estrutura de testes populada com os seguintes métodos:
-            println("🧩 [UnitCat] Estrutura de testes populada com os seguintes métodos:")
-            estruturaDeTestes.forEach { (nome, codigo) ->
-                println("  🔹 $nome -> ${codigo.lines().firstOrNull()?.take(100)}...")
-            }
-
-            // --- Reconstruir classe usando header, estruturaDeTestes, footer ---
-            val rebuiltClass = buildString {
-                appendLine(header.trim())
-                appendLine()
-                // Para cada método, adiciona o corpo completo exatamente como gerado
-                estruturaDeTestes.values.forEach { methodCode ->
-                    appendLine(methodCode)
-                    appendLine()
-                }
-                appendLine(footer.trim())
-            }
-            testFile.writeText(rebuiltClass)
-
-            // 📄 [UnitCat] Classe de teste reconstruída com base na estrutura interna. Conteúdo inicial:
-            println("📄 [UnitCat] Classe de teste reconstruída com base na estrutura interna. Conteúdo inicial:")
-            println(rebuiltClass.lines().take(20).joinToString("\n"))
-
             // Abre a classe criada automaticamente no editor
             val newVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
                 .refreshAndFindFileByIoFile(testFile)
@@ -537,16 +434,10 @@ class MyToolWindowFactory : ToolWindowFactory {
                             val retryResultNode = objectMapper.readTree(responseJson)
                             println("🔁 [UnitCat] Resposta JSON de /retry parseada com sucesso.")
                             // ===== INÍCIO: Atualiza métodos da classe de teste diretamente com base na resposta /retry =====
-                            val modifiedMethods = retryResultNode.get("modifiedTestMethods")
-                            val modifiedMethodsList = mutableListOf<Pair<String, String>>()
-                            modifiedMethods?.forEach { methodNode ->
-                                val methodName = methodNode.get("methodName").asText()
-                                val modifiedCode = methodNode.get("modifiedCode").asText().trim()
-                                modifiedMethodsList.add(methodName to modifiedCode)
-                                println("🔁 [UnitCat] Método '${methodName}' recebido para substituição.")
-                            }
-                            substituirMetodosNoArquivo(testFile, modifiedMethodsList)
+                            // Substitui diretamente métodos com base na nova lógica
+                            substituirMetodosNoArquivo(testFile, retryResponse.body())
                             println("📄 [UnitCat] Classe de teste atualizada com métodos do /retry.")
+                            val modifiedMethods = retryResultNode.get("modifiedTestMethods")
                             val requiredImports = retryResultNode.get("requiredNewImports")
                             println("🔁 [UnitCat] Quantidade de métodos modificados recebidos: ${modifiedMethods?.size() ?: 0}")
                             println("🔁 [UnitCat] Quantidade de novos imports recebidos: ${requiredImports?.size() ?: 0}")
@@ -653,80 +544,158 @@ class MyToolWindowFactory : ToolWindowFactory {
         @JvmStatic
         val errosDeTesteGlobal: MutableList<Map<String, String>> = mutableListOf()
     }
+
+    // ...
 }
-/**
- * Substitui diretamente os métodos @Test no arquivo de teste com base no nome dos métodos.
- * @param testFile Arquivo da classe de teste.
- * @param novosMetodos Lista de pares (nome, código completo do método incluindo assinatura e corpo) dos métodos a serem substituídos.
- */
-private fun substituirMetodosNoArquivo(testFile: java.io.File, novosMetodos: List<Pair<String, String>>) {
-    if (novosMetodos.isEmpty()) return
-    val conteudoOriginal = testFile.readText()
-    val linhas = conteudoOriginal.lines()
-    val testAnnotationRegex = Regex("""^\s*@Test""")
-    val methodHeaderRegex = Regex("""\s*void\s+(\w+)\s*\(\)\s*\{""")
-    val novosMetodosMap = novosMetodos.toMap()
+        // Função para substituir métodos no arquivo de teste com base no JSON de atualização (/retry)
+        private fun substituirMetodosNoArquivo(testFile: java.io.File, updatesJson: String) {
+            val objectMapper = jacksonObjectMapper()
 
-    val resultado = mutableListOf<String>()
-    var i = 0
-    while (i < linhas.size) {
-        val linha = linhas[i]
-        if (testAnnotationRegex.containsMatchIn(linha)) {
-            // Encontrou início de método @Test
-            val anotacoes = mutableListOf<String>()
-            var annotationStartIdx = i
-            while (annotationStartIdx > 0 && linhas[annotationStartIdx - 1].trim().startsWith("@")) {
-                annotationStartIdx--
-            }
-            for (j in annotationStartIdx..i) {
-                anotacoes.add(linhas[j])
-            }
+            data class ModifiedTestMethod(val methodName: String, val modifiedCode: String)
+            data class UpdatePayload(
+                val modifiedTestMethods: List<ModifiedTestMethod>,
+                val requiredNewImports: List<String>
+            )
 
-            // Avança para o cabeçalho do método
-            var j = i + 1
-            val metodoBuilder = StringBuilder()
-            anotacoes.forEach { metodoBuilder.appendLine(it) }
-            var braceBalance = 0
-            var headerFound = false
-            while (j < linhas.size && !headerFound) {
-                val l = linhas[j]
-                metodoBuilder.appendLine(l)
-                if (l.contains("{")) {
-                    braceBalance += l.count { it == '{' }
-                    braceBalance -= l.count { it == '}' }
-                    headerFound = true
+            data class MethodBlock(
+                val name: String,
+                val startIndex: Int,
+                val endIndex: Int,
+                val originalCodeLines: List<String>
+            )
+
+            fun refactorTestClass(originalTestClasse: String, updates: UpdatePayload): String {
+                val originalLines = originalTestClasse.lines()
+                val newLines = mutableListOf<String>()
+
+                var packageLine: String? = null
+                val existingImports = mutableSetOf<String>()
+                var importBlockEndIndex = -1
+                var classStartIndex = -1
+
+                for ((index, line) in originalLines.withIndex()) {
+                    val trimmedLine = line.trim()
+                    if (trimmedLine.startsWith("package ")) {
+                        packageLine = line
+                    } else if (trimmedLine.startsWith("import ")) {
+                        existingImports.add(line)
+                        importBlockEndIndex = index
+                    } else if (trimmedLine.contains(" class ") && trimmedLine.endsWith("{")) {
+                        if (classStartIndex == -1) {
+                            classStartIndex = index
+                        }
+                    }
                 }
-                j++
+
+                val methodBlocks = mutableListOf<MethodBlock>()
+                var currentMethodStart = -1
+                var currentMethodName: String? = null
+                var braceLevel = 0
+                var inMethod = false
+                val methodSignatureRegex = Regex("""^\s*(?:public|private|protected|static|\s)*\s*\w+\s+(\w+)\s*\(.*\)\s*(?:throws\s+[\w\.,\s]+)?\s*\{\s*$""")
+                val searchStartIndex = if (importBlockEndIndex != -1) importBlockEndIndex + 1 else if (packageLine != null) 1 else 0
+
+                for (i in searchStartIndex until originalLines.size) {
+                    val line = originalLines[i]
+                    val trimmedLine = line.trim()
+
+                    if (!inMethod && trimmedLine.startsWith("@")) {
+                        if (currentMethodStart == -1) {
+                            currentMethodStart = i
+                        }
+                    }
+
+                    val match = methodSignatureRegex.find(line)
+                    if (!inMethod && match != null) {
+                        val potentialName = match.groupValues[1]
+                        if (currentMethodStart == -1) {
+                            currentMethodStart = i
+                        }
+                        currentMethodName = potentialName
+                        inMethod = true
+                        braceLevel = line.count { it == '{' } - line.count { it == '}' }
+                        if (braceLevel == 0 && line.contains("{") && line.contains("}")) {
+                            methodBlocks.add(
+                                MethodBlock(
+                                    name = currentMethodName,
+                                    startIndex = currentMethodStart,
+                                    endIndex = i,
+                                    originalCodeLines = originalLines.subList(currentMethodStart, i + 1)
+                                )
+                            )
+                            inMethod = false
+                            currentMethodStart = -1
+                            currentMethodName = null
+                        }
+                    } else if (inMethod) {
+                        braceLevel += line.count { it == '{' }
+                        braceLevel -= line.count { it == '}' }
+                        if (braceLevel <= 0) {
+                            methodBlocks.add(
+                                MethodBlock(
+                                    name = currentMethodName ?: "<unknown>",
+                                    startIndex = currentMethodStart,
+                                    endIndex = i,
+                                    originalCodeLines = originalLines.subList(currentMethodStart, i + 1)
+                                )
+                            )
+                            inMethod = false
+                            currentMethodStart = -1
+                            currentMethodName = null
+                        }
+                    } else if (currentMethodStart != -1 && !trimmedLine.startsWith("@") && trimmedLine.isNotEmpty()) {
+                        currentMethodStart = -1
+                    }
+                }
+
+                packageLine?.let { newLines.add(it) }
+                newLines.add("")
+                val allImports = existingImports.toMutableSet()
+                updates.requiredNewImports.forEach { imp ->
+                    val importToAdd = if (imp.trim().startsWith("import ")) imp else "import ${imp.trim()};"
+                    allImports.add(importToAdd)
+                }
+                newLines.addAll(allImports.sorted())
+                newLines.add("")
+
+                val firstContentIndex = methodBlocks.firstOrNull()?.startIndex ?: classStartIndex
+                if (firstContentIndex > importBlockEndIndex + 1) {
+                    newLines.addAll(originalLines.subList(importBlockEndIndex + 1, firstContentIndex))
+                }
+
+                val updatesMap = updates.modifiedTestMethods.associateBy { it.methodName }
+                var lastAddedLineIndex = (methodBlocks.firstOrNull()?.startIndex ?: classStartIndex) - 1
+
+                methodBlocks.forEach { block ->
+                    if (block.startIndex > lastAddedLineIndex + 1) {
+                        newLines.addAll(originalLines.subList(lastAddedLineIndex + 1, block.startIndex))
+                    }
+
+                    val update = updatesMap[block.name]
+                    if (update != null) {
+                        newLines.addAll(update.modifiedCode.lines())
+                        println("🔁 [UnitCat] Método '${block.name}' substituído com sucesso.")
+                    } else {
+                        newLines.addAll(block.originalCodeLines)
+                    }
+                    lastAddedLineIndex = block.endIndex
+                }
+
+                if (lastAddedLineIndex < originalLines.size - 1) {
+                    newLines.addAll(originalLines.subList(lastAddedLineIndex + 1, originalLines.size))
+                }
+
+                return newLines.joinToString("\n")
             }
 
-            // Captura corpo do método
-            while (j < linhas.size && braceBalance > 0) {
-                val l = linhas[j]
-                metodoBuilder.appendLine(l)
-                if ("{" in l) braceBalance += l.count { it == '{' }
-                if ("}" in l) braceBalance -= l.count { it == '}' }
-                j++
+            try {
+                val updates = objectMapper.readValue<UpdatePayload>(updatesJson)
+                val original = testFile.readText()
+                val updated = refactorTestClass(original, updates)
+                testFile.writeText(updated)
+                println("✅ [UnitCat] Classe Java atualizada com sucesso com base no JSON do /retry.")
+            } catch (e: Exception) {
+                println("❌ [UnitCat] Erro ao processar JSON de atualização: ${e.message}")
+                e.printStackTrace()
             }
-
-            val metodoOriginal = metodoBuilder.toString()
-            val nomeMetodo = methodHeaderRegex.find(metodoOriginal)?.groups?.get(1)?.value
-            if (nomeMetodo != null && novosMetodosMap.containsKey(nomeMetodo)) {
-                val novoMetodoCompleto = novosMetodosMap[nomeMetodo]!!
-                resultado.addAll(novoMetodoCompleto.lines())
-                resultado.add("") // separador visual
-                println("🔁 [UnitCat] Método '$nomeMetodo' substituído diretamente no arquivo.")
-            } else {
-                resultado.addAll(metodoOriginal.lines())
-                resultado.add("")
-            }
-            i = j
-            continue
         }
-
-        // Linha normal fora de @Test
-        resultado.add(linha)
-        i++
-    }
-
-    testFile.writeText(resultado.joinToString("\n"))
-}

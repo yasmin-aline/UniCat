@@ -3,6 +3,10 @@
 
 ### Demonstração
 
+
+https://github.com/user-attachments/assets/549d4ff1-2ee4-4229-b358-d641a4635aeb
+
+
 ### Fluxo de funcionamento
 ```mermaid
 sequenceDiagram

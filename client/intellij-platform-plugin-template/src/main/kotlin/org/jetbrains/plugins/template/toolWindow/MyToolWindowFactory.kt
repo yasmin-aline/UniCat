@@ -22,6 +22,11 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiJavaFile
 import com.intellij.ui.components.JBLabel
+import javax.swing.Box
+import javax.swing.JTextArea
+import javax.swing.JScrollPane
+import java.awt.Dimension
+import java.awt.Component
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.content.ContentFactory
 import com.intellij.util.messages.MessageBusConnection
@@ -31,9 +36,7 @@ import org.jetbrains.idea.maven.execution.MavenRunnerSettings
 import org.jetbrains.idea.maven.project.MavenGeneralSettings
 import org.jetbrains.plugins.template.services.MyProjectService
 import java.io.ByteArrayOutputStream
-import javax.swing.JButton
-import javax.swing.JScrollPane
-import javax.swing.JTextArea
+import javax.swing.*
 
 private data class ParsedInitResponse(
     val scenarios: String,
@@ -100,42 +103,109 @@ class MyToolWindowFactory : ToolWindowFactory {
 
         fun getContent() = buildUI()
 
-        private fun buildUI() = JBPanel<JBPanel<*>>(java.awt.BorderLayout()).apply {
-            val label = JBLabel("Diretrizes de criação de testes do seu projeto:").apply {
-                border = javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10)
-            }
-            add(label, java.awt.BorderLayout.NORTH)
-            add(createCenterPanel(), java.awt.BorderLayout.CENTER)
-        }
+        private fun buildUI() = JBPanel<JBPanel<*>>().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10)
 
-        private fun createGenerateTestsButton(): JButton {
-            return JButton("Gerar testes").apply {
-                maximumSize = java.awt.Dimension(150, 30)
+            // Apenas o botão principal "Gerar testes unitários"
+            val gerarTestsButton = JButton("Gerar testes unitários").apply {
+                preferredSize = java.awt.Dimension(200, 40)
+                maximumSize = java.awt.Dimension(Int.MAX_VALUE, 40)
+                background = java.awt.Color(103, 80, 164)
+                foreground = java.awt.Color.WHITE
+                isOpaque = true
+                font = font.deriveFont(java.awt.Font.BOLD, 14f)
+                alignmentX = java.awt.Component.LEFT_ALIGNMENT
+                border = javax.swing.BorderFactory.createCompoundBorder(
+                    javax.swing.BorderFactory.createLineBorder(java.awt.Color(200, 200, 200), 1, true),
+                    javax.swing.BorderFactory.createEmptyBorder(
+                        margin.top,
+                        margin.left,
+                        margin.bottom,
+                        margin.right
+                    )
+                )
                 addActionListener { onGerarTestesClicked() }
             }
-        }
+            add(gerarTestsButton)
+            add(Box.createVerticalStrut(12))
+            val monitorLabel = JBLabel("Monitor de atividades").apply {
+                font = font.deriveFont(java.awt.Font.BOLD, 12f)
+                alignmentX = Component.LEFT_ALIGNMENT
+                border = javax.swing.BorderFactory.createEmptyBorder(
+                    0,
+                    gerarTestsButton.margin.left,
+                    0,
+                    gerarTestsButton.margin.right
+                )
+            }
+            add(monitorLabel)
+            // Espaçamento de 12 pixels entre o label e o retângulo de logs
+            add(Box.createVerticalStrut(12))
 
-        private fun createButtonPanel(): JBPanel<JBPanel<*>> {
-            return JBPanel<JBPanel<*>>(java.awt.BorderLayout()).apply {
-                maximumSize = java.awt.Dimension(Int.MAX_VALUE, 40)
-                add(javax.swing.JComboBox(arrayOf("Em Lote", "Por Cenário")).apply {
-                    maximumSize = java.awt.Dimension(150, 30)
-                }, java.awt.BorderLayout.WEST)
-                add(createGenerateTestsButton(), java.awt.BorderLayout.EAST)
+            // 3. Painel de logs (rectangle) como JTextArea não editável dentro de JScrollPane
+            val logsArea = JTextArea(6, 30).apply {
+                isEditable = false
+                background = java.awt.Color.BLACK
+                foreground = java.awt.Color.WHITE
+                border = javax.swing.BorderFactory.createLineBorder(java.awt.Color(200, 200, 200))
+                font = font.deriveFont(12f)
             }
-        }
+            val logsScroll = JScrollPane(logsArea).apply {
+                preferredSize = Dimension(Short.MAX_VALUE.toInt(), 200)
+                maximumSize = Dimension(Short.MAX_VALUE.toInt(), 200)
+                alignmentX = Component.LEFT_ALIGNMENT
+                border = javax.swing.BorderFactory.createCompoundBorder(
+                    javax.swing.BorderFactory.createEmptyBorder(
+                        0,
+                        gerarTestsButton.margin.left,
+                        0,
+                        gerarTestsButton.margin.right
+                    ),
+                    javax.swing.BorderFactory.createLineBorder(java.awt.Color(200, 200, 200))
+                )
+            }
+            add(logsScroll)
 
-        private fun createCenterPanel(): JBPanel<JBPanel<*>> {
-            val scrollPane = JScrollPane(textArea).apply {
-                preferredSize = java.awt.Dimension(Short.MAX_VALUE.toInt(), 200)
-                maximumSize = java.awt.Dimension(Int.MAX_VALUE, 200)
+            // Espaçamento de 12 pixels antes do label de diretrizes
+            add(Box.createVerticalStrut(12))
+            val diretrizesLabel = JBLabel("Diretrizes do projeto:").apply {
+                font = font.deriveFont(java.awt.Font.BOLD, 12f)
+                alignmentX = Component.LEFT_ALIGNMENT
+                border = javax.swing.BorderFactory.createEmptyBorder(
+                    0,
+                    gerarTestsButton.margin.left,
+                    0,
+                    gerarTestsButton.margin.right
+                )
             }
-            return JBPanel<JBPanel<*>>().apply {
-                layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS)
-                add(scrollPane)
-                add(javax.swing.Box.createVerticalStrut(10))
-                add(createButtonPanel())
+            add(diretrizesLabel)
+
+            // Espaçamento de 12 pixels entre o label e a área de texto de diretrizes
+            add(Box.createVerticalStrut(12))
+
+            // Área de texto para diretrizes do projeto (altura 100 px)
+            val diretrizesArea = JTextArea(4, 30).apply {
+                lineWrap = true
+                wrapStyleWord = true
+                border = javax.swing.BorderFactory.createLineBorder(java.awt.Color(200, 200, 200))
+                font = font.deriveFont(12f)
             }
+            val diretrizesScroll = JScrollPane(diretrizesArea).apply {
+                preferredSize = Dimension(Short.MAX_VALUE.toInt(), 100)
+                maximumSize = Dimension(Short.MAX_VALUE.toInt(), 100)
+                alignmentX = Component.LEFT_ALIGNMENT
+                border = javax.swing.BorderFactory.createCompoundBorder(
+                    javax.swing.BorderFactory.createEmptyBorder(
+                        0,
+                        gerarTestsButton.margin.left,
+                        0,
+                        gerarTestsButton.margin.right
+                    ),
+                    javax.swing.BorderFactory.createLineBorder(java.awt.Color(200, 200, 200))
+                )
+            }
+            add(diretrizesScroll)
         }
 
         private fun onGerarTestesClicked() {

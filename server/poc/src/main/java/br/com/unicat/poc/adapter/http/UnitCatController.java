@@ -5,6 +5,7 @@ import br.com.unicat.poc.adapter.http.dtos.request.CompleteRequestDTO;
 import br.com.unicat.poc.adapter.http.dtos.request.RetryRequestDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.CompleteResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.InitResponseDTO;
+import br.com.unicat.poc.adapter.http.dtos.response.RefactoredUnitTestResponseDTO;
 import br.com.unicat.poc.usecases.AnalyseLogicAndIdentifyScenariosUseCase;
 import br.com.unicat.poc.usecases.interfaces.CompleteUnitTestsCreationInterface;
 import br.com.unicat.poc.usecases.interfaces.InitUnitTestsCreationInterface;
@@ -29,7 +30,7 @@ public class UnitCatController {
   private final AnalyseLogicAndIdentifyScenariosUseCase analyseLogicAndIdentifyScenariosUseCase;
 
   @PostMapping(path = "/init")
-  public ResponseEntity<InitResponseDTO> init(RequestContext requestContext) throws Exception {
+  public ResponseEntity<InitResponseDTO> init(final RequestContext requestContext) throws Exception {
     log.info("INIT init. requestContext: {}", requestContext);
     final InitResponseDTO ans = this.initUnitTestsCreation.execute();
 
@@ -40,7 +41,7 @@ public class UnitCatController {
   @PostMapping(path = "/complete")
   public ResponseEntity<CompleteResponseDTO> complete(
       @ModelAttribute final CompleteRequestDTO requestDTO,
-      RequestContext requestContext) throws Exception {
+      final RequestContext requestContext) throws Exception {
     log.info("INIT complete. requestDTO: {}", requestDTO);
     final var analysedLogicResponseDTO = this.analyseLogicAndIdentifyScenariosUseCase.execute(requestDTO.dependenciesName(), requestDTO.dependencies());
     final var testClassGenerated = this.completeUnitTestsCreation.execute(requestDTO, analysedLogicResponseDTO);
@@ -50,9 +51,9 @@ public class UnitCatController {
   }
 
   @PostMapping(path = "/retry")
-  public ResponseEntity<String> retry(@ModelAttribute final RetryRequestDTO requestDTO) {
+  public ResponseEntity<RefactoredUnitTestResponseDTO> retry(@ModelAttribute final RetryRequestDTO requestDTO, final RequestContext requestContext) throws Exception {
     log.info("INIT retry. requestDTO: {}", requestDTO);
-    final String ans = this.refactorFailingUnitTestsCreation.execute();
+    final RefactoredUnitTestResponseDTO ans = this.refactorFailingUnitTestsCreation.execute(requestDTO.dependenciesName(), requestDTO.dependencies(), requestDTO.testClassCode(), requestDTO.failingTestDetailsRequestDTOS());
 
     log.info("END retry. ans: {}", ans);
     return ResponseEntity.ok().body(ans);

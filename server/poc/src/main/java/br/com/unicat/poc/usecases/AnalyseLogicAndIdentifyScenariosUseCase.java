@@ -21,8 +21,8 @@ public class AnalyseLogicAndIdentifyScenariosUseCase implements AnalyseLogicAndI
     @Override
     public AnalysedLogicResponseDTO execute(final String dependenciesName, final String dependencies) throws Exception {
         log.info("INIT AnalyseLogicAndIdentifyScenariosUseCase execute. dependenciesName: {}", dependenciesName);
-
         final var prompt = this.analyseLogicAndIdentityScenariosPromptGenerator.get(dependencies, dependenciesName);
+
         final var chatResponse = this.b3gptGateway.callAPI(prompt);
         final var assistantMessage = chatResponse.getResult().getOutput();
 

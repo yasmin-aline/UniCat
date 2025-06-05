@@ -25,10 +25,12 @@ public class InitUnitTestsCreationUseCase implements InitUnitTestsCreationInterf
   @Override
   public InitResponseDTO execute() throws Exception {
     final Prompt prompt = this.analyseCodeAndIdentifyDependenciesPromptGenerator.get();
+
     final ChatResponse chatResponse = this.gateway.callAPI(prompt);
     final AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
 
     final AnalysedCode analysedCode = JsonLlmResponseParser.parseLlmResponse(assistantMessage, AnalysedCode.class);
+    assert analysedCode != null;
 
     return InitResponseDTO.builder()
         .analysisResponseDTO(

@@ -10,8 +10,8 @@
 
     <resource-bundle>messages.MyBundle</resource-bundle>
 
+
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="org.jetbrains.plugins.template.toolWindow.MyToolWindowFactory" id="UnitCat"/>
-        <postStartupActivity implementation="org.jetbrains.plugins.template.startup.MyProjectActivity" />
+        <toolWindow factoryClass="org.jetbrains.plugins.template.toolWindow.MyToolWindowFactory" id="UnitCat" />
     </extensions>
 </idea-plugin>

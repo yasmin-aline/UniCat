@@ -1,6 +1,7 @@
 # 😺 UniCat 
 ## 🕐 Geração de testes unitários em menos de 5 minutos
 Já pensou em gerar uma classe de testes unitários inteira em menos de 5 minutos? Com o UniCat você pode!
+
 O UniCat é um plugin para a IDE IntelliJ IDEA direcionado para a geração de testes unitários. Com o auxílio da Inteligência Artificial, o plugin automatiza a criação dos testes seguindo as melhores práticas de código.
 Basta selecionar uma classe Java, ativar o plugin e esperar enquanto UniCat traz o poder da IA para os seus testes! 
 
@@ -27,6 +28,7 @@ A estrutura do UniCat é composta pelos seguintes elementos:
 - API do modelo GPT-4o da AzureOpenAI. 
 
 O plugin é responsável por enviar ao Back End a classe a ser testada e todas as dependências necessárias para a geração de bons testes. O Back End, por sua vez, associa o código a prompts especialmente desenvolvidos para este fim, enviando à IA os insumos requisitados para a escrita do código. 
+
 O código escrito é enviado novamente ao plugin, que já executa os testes fornecidos, solicitando ao Back End a refatoração dos testes falhos.
 
 ## 🔄 Fluxo de funcionamento

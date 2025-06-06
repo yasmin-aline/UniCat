@@ -6,7 +6,7 @@ spring:
     azure:
       openai:
         endpoint: https://api-b3gpt.b3.com.br/internal-api/b3gpt-llms/v1
-        api-key: 55673c0e64327832e19a05c2684127fd50b9cb803fcd835d27bd705cfb3dc616
+        api-key: ${UNICAT-AZURE-OPENAI-API-KEY:}
         chat:
           options:
             deployment-name: gpt4o-mini

@@ -5,7 +5,7 @@ O UniCat é um plugin para a IDE IntelliJ IDEA direcionado para a geração de t
 Basta selecionar uma classe Java, ativar o plugin e esperar enquanto UniCat traz o poder da IA para os seus testes! 
 
 <p align=center>
-![unicat](https://github.com/user-attachments/assets/bbe9cd9a-1415-46d7-85c4-40a15af14aa5)
+    <img src="https://github.com/user-attachments/assets/bbe9cd9a-1415-46d7-85c4-40a15af14aa5" alt="Imagem de um gatinho vesgo dentro de uma caixa sobre um fundo azul marinho.">
 </p>
 
 Este projeto foi desenvolvido para a Hackathon 2025 da B3.
@@ -18,7 +18,7 @@ https://github.com/user-attachments/assets/549d4ff1-2ee4-4229-b358-d641a4635aeb
 ### Detalhes técnicos
 
 <p align=center>
-![Tools Used](https://skillicons.dev/icons?i=idea,kotlin,java,spring,azure)
+    <img src="https://skillicons.dev/icons?i=idea,kotlin,java,spring,azure" alt="ícones das ferramentas utilizadas no projeto: IntelliJ IDEA, Kotlin, Java, Spring e Azure">
 </p>
 
 A estrutura do UniCat é composta pelos seguintes elementos: 

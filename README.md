@@ -6,6 +6,7 @@ Basta selecionar uma classe Java, ativar o plugin e esperar enquanto UniCat traz
 
 <center>![unicat](https://github.com/user-attachments/assets/bbe9cd9a-1415-46d7-85c4-40a15af14aa5)</center>
 
+
 Este projeto foi desenvolvido para a Hackathon 2025 da B3.
 
 ### Demonstração
@@ -15,6 +16,8 @@ https://github.com/user-attachments/assets/549d4ff1-2ee4-4229-b358-d641a4635aeb
 
 ### Detalhes técnicos
 <center>[![Tools Used](https://skillicons.dev/icons?i=idea,kotlin,java,spring,azure)](https://skillicons.dev)</center>
+
+
 A estrutura do UniCat é composta pelos seguintes elementos: 
 - Plugin para o IntelliJ IDEA escrito em Kotlin; 
 - Back end Java Spring que utiliza a mais recente ferramenta do framework: Spring AI;

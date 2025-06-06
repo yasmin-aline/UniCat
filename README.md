@@ -14,7 +14,9 @@ Este projeto foi desenvolvido para a Hackathon 2025 da B3.
 ## 💻 Demonstração
 Parece bom demais pra ser verdade? Assista abaixo a demonstração do nosso protótipo e veja o UniCat em ação!
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/2NuXPFIeAUk?si=jKIn0T827x3-jq8P" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+<p align=center>
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/2NuXPFIeAUk?si=jKIn0T827x3-jq8P" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"     referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</p>
 
 ## 🔧 Detalhes técnicos
 

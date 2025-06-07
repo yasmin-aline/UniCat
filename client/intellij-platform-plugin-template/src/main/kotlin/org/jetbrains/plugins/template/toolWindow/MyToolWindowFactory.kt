@@ -339,8 +339,6 @@ class MyToolWindowFactory : ToolWindowFactory {
             }
         }
 
-        // Removido: obterDependenciasDoPsi, pois dependências agora vêm do endpoint /init
-
         private fun enviarRequisicaoComplete(project: Project) {
             appendLog("[PROCESSING] Enviando requisição /complete...")
             appendLog("[PROCESSING] Payload enviado:")
@@ -591,163 +589,6 @@ class MyToolWindowFactory : ToolWindowFactory {
             }
         }
 
-//        private fun executarGoalMaven(
-//            project: Project,
-//            retryCount: Int = 0,
-//            goal: String = "test"
-//        ) {
-//            val mavenProjects = org.jetbrains.idea.maven.project.MavenProjectsManager.getInstance(project).projects
-//            appendLog("[INFO] MavenProjectsManager encontrou ${mavenProjects.size} projetos")
-//            val mavenProject = mavenProjects.firstOrNull()
-//            if (mavenProject == null) {
-//                appendLog("[ERROR] Não há projetos Maven registrados ainda; pulando execução")
-//                return
-//            }
-//
-//            val projectDirPath = mavenProject.directory
-//            appendLog("[INFO] Diretório do projeto Maven: $projectDirPath")
-//
-//            val parameters = MavenRunnerParameters(
-//                true,
-//                projectDirPath,
-//                null as String?,
-//                listOf(goal),
-//                emptyList()
-//            )
-//
-//            val settings = MavenRunnerSettings()
-//            val generalSettings: MavenGeneralSettings? = null
-//
-//            val outputStream = ByteArrayOutputStream()
-//            val processListener = object : ProcessAdapter() {
-//                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
-//                    super.onTextAvailable(event, outputType)
-//                    print("[MAVEN] ${event.text.trim()}")
-//                    outputStream.write(event.text.toByteArray())
-//                }
-//
-//                override fun processTerminated(event: ProcessEvent) {
-//                    super.processTerminated(event)
-//                    appendLog("[PROCESSING] Iniciando execução do Maven com retryCount = $retryCount")
-//                    if (retryCount >= 5) {
-//                        appendLog("[PROCESSING] Limite de 5 tentativas de retry atingido.")
-//                        return
-//                    }
-//                    val logContent = outputStream.toString(Charsets.UTF_8.name())
-//                    appendLog("[INFO] Logs Maven capturados.")
-//                    appendLog("[INFO] Conteúdo completo do log Maven: \n$logContent")
-//
-//                    val errosDeTesteFinal = MyToolWindowFactory.errosDeTesteGlobal
-//                    appendLog("📋 [INFO] Lista final de testes com falha:")
-//
-//                    errosDeTesteFinal.forEachIndexed { index, erro ->
-//                        appendLog("🔹 Erro ${index + 1}:")
-//                        appendLog("   Método real: ${erro["nomeMetodo"]}")
-//                        appendLog("   DisplayName: ${erro["displayName"]}")
-//                        appendLog("   Mensagem de erro: ${erro["mensagemErro"]?.take(300)}")
-//                        appendLog("   Stacktrace: ${erro["stacktrace"]?.take(300)}")
-//                        appendLog("   Código do método:\n${erro["codigoMetodo"]?.take(1000)}")
-//                        appendLog("----------------------------------------------------")
-//                    }
-//
-//                    val objectMapper = jacksonObjectMapper()
-//                    appendLog("[INFO] Estrutura de dados completa dos testes com falha:")
-//                    appendLog(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(errosDeTesteFinal))
-//
-//                    appendLog("[PROCESSING] Enviando requisição /retry com ${errosDeTesteFinal.size} testes falhos...")
-//                    appendLog("[PROCESSING] Construindo corpo da requisição /retry...")
-//
-//                    val testClassCodeAtual: String = try {
-//                        val vFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-//                            .findFileByIoFile(testFile)
-//                        if (vFile != null) {
-//                            val doc = FileDocumentManager.getInstance().getDocument(vFile)
-//                            doc?.text ?: testFile.readText()
-//                        } else {
-//                            testFile.readText()
-//                        }
-//                    } catch (_: Exception) {
-//                        testFile.readText()
-//                    }
-//
-//                    val dependenciesNameRetry = parsedResponse?.customDependencies?.joinToString(",") ?: ""
-//                    val formParams = mutableListOf(
-//                        "targetClassName" to targetClassName,
-//                        "targetClassPackage" to targetClassPackage,
-//                        "targetClassCode" to targetClassCode,
-//                        "testClassCode" to testClassCodeAtual,
-//                        "dependencies" to dependenciasCodigo,
-//                        "dependenciesName" to dependenciesNameRetry
-//                    )
-//                    val failingTestsJson = objectMapper.writeValueAsString(errosDeTesteFinal)
-//                    formParams.add("failingTestDetailsRequestDTOS" to failingTestsJson)
-//
-//                    val retryRequestBody = formParams.joinToString("&") { (key, value) ->
-//                        "${java.net.URLEncoder.encode(key, "UTF-8")}=${java.net.URLEncoder.encode(value, "UTF-8")}"
-//                    }
-//
-//                    appendLog("[INFO] Processo Maven finalizado (código: ${event.exitCode})")
-//
-//                    val errorLines = logContent.lines()
-//                        .filter { it.contains("[ERROR]") || it.contains("COMPILATION ERROR") || it.contains("BUILD FAILURE") }
-//                        .joinToString("\n")
-//
-//                    if (errorLines.isNotEmpty()) {
-//                        appendLog("[ERROR] Foram encontrados erros '[ERROR]' no log Maven.")
-//                        appendLog("[PROCESSING] Enviando requisição HTTP para /retry...")
-//                        val retryRequest = java.net.http.HttpRequest.newBuilder()
-//                            .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
-//                            .header("Content-Type", "application/x-www-form-urlencoded")
-//                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(retryRequestBody))
-//                            .build()
-//                        try {
-//                            val retryResponse = java.net.http.HttpClient.newHttpClient().send(
-//                                retryRequest,
-//                                java.net.http.HttpResponse.BodyHandlers.ofString()
-//                            )
-//                            appendLog("[INFO] Resposta /retry recebida:")
-//                            appendLog("[INFO] Conteúdo:\n${retryResponse.body()}")
-//
-//                            val responseJson = retryResponse.body()
-//                            val retryResultNode = objectMapper.readTree(responseJson)
-//                            appendLog("[PROCESSING] Resposta JSON de /retry parseada com sucesso.")
-//                            substituirMetodosNoArquivo(testFile, retryResponse.body())
-//                            appendLog("[INFO] Classe de teste atualizada com métodos do /retry.")
-//                            executarGoalMaven(project, retryCount + 1)
-//                            val modifiedMethods = retryResultNode.get("modifiedTestMethods")
-//                            val requiredImports = retryResultNode.get("requiredNewImports")
-//                            appendLog("[PROCESSING] Quantidade de métodos modificados recebidos: ${modifiedMethods?.size() ?: 0}")
-//                            appendLog("[PROCESSING] Quantidade de novos imports recebidos: ${requiredImports?.size() ?: 0}")
-//                        } catch (e: Exception) {
-//                            e.printStackTrace()
-//                            appendLog("[ERROR] Falha ao chamar o endpoint /retry: ${e.message}")
-//                        }
-//                    } else {
-//                        appendLog("[INFO] Nenhum erro '[ERROR]' identificado no log Maven.")
-//                        appendLog("[INFO] Build Maven bem-sucedido, sem falhas nos testes.")
-//                    }
-//                }
-//            }
-//
-//            ApplicationManager.getApplication().invokeAndWait { FileDocumentManager.getInstance().saveAllDocuments() }
-//
-//            MavenRunConfigurationType.runConfiguration(
-//                project,
-//                parameters,
-//                generalSettings,
-//                settings,
-//                { descriptor ->
-//                    val handler = descriptor.processHandler
-//                    if (handler != null) {
-//                        handler.addProcessListener(processListener)
-//                    } else {
-//                        appendLog("[ERROR] Erro: ProcessHandler é nulo após o início do processo.")
-//                    }
-//                },
-//                false
-//            )
-//        }
-
     }
 
     private fun registrarListenerDeTeste(project: Project) {
@@ -828,16 +669,6 @@ class MyToolWindowFactory : ToolWindowFactory {
             try {
                 val testFile = myToolWindowInstance.testFile
                 myToolWindowInstance.substituirMetodosNoArquivo(testFile, response.body())
-//                // Refresh VFS and PSI to pick up updated testFile
-//                val vFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-//                    .refreshAndFindFileByIoFile(testFile)
-//                vFile?.refresh(false, false)
-//                val document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance()
-//                    .getDocument(vFile!!)
-//                if (document != null) {
-//                    com.intellij.openapi.fileEditor.FileDocumentManager.getInstance()
-//                        .reloadFromDisk(document)
-//                }
             } catch (e: Exception) {
                 myToolWindowInstance.appendLog("[ERROR] Falha ao substituir métodos no arquivo: ${e.message}")
             }

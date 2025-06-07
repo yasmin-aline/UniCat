@@ -4,39 +4,42 @@ import com.fasterxml.jackson.module.kotlin.convertValue
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.intellij.execution.ProgramRunnerUtil.executeConfiguration
-import com.intellij.execution.process.ProcessAdapter
-import com.intellij.execution.process.ProcessEvent
+import com.intellij.execution.testframework.sm.runner.SMTRunnerEventsListener
+import com.intellij.execution.testframework.sm.runner.SMTestProxy
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.compiler.CompilerManager
+import com.intellij.openapi.compiler.CompilerMessageCategory
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Key
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiJavaFile
+import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiMethod
+import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.content.ContentFactory
-import org.jetbrains.idea.maven.execution.MavenRunConfigurationType
-import org.jetbrains.idea.maven.execution.MavenRunnerParameters
-import org.jetbrains.idea.maven.execution.MavenRunnerSettings
-import org.jetbrains.idea.maven.project.MavenGeneralSettings
+import com.intellij.util.messages.MessageBusConnection
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.RenderingHints
-import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URLEncoder
 import javax.swing.*
 import javax.swing.text.DefaultEditorKit
 import javax.swing.text.SimpleAttributeSet
 import javax.swing.text.StyleConstants
 import javax.swing.text.StyledDocument
 
-private data class ParsedInitResponse(
+data class ParsedInitResponse(
     val analysisResponseDTO: Map<String, Any>?,
     val customDependencies: List<String>
 )
@@ -48,31 +51,40 @@ data class CompleteResponseDTO(
 
 class MyToolWindowFactory : ToolWindowFactory {
 
+    // Store the FQN of the latest generated test class for retry cycles
+    private var latestGeneratedTestClassFqn: String = ""
+
+    // Hold a reference to the tool window instance
+    private lateinit var myToolWindowInstance: MyToolWindow
+
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val myToolWindow = MyToolWindow(toolWindow)
+        this.myToolWindowInstance = myToolWindow
         val content = ContentFactory.getInstance().createContent(myToolWindow.getContent(), null, false)
         toolWindow.contentManager.addContent(content)
+        registrarListenerDeTeste(project)
     }
 
     override fun shouldBeAvailable(project: Project) = true
 
-    class MyToolWindow(private val toolWindow: ToolWindow) {
+    inner class MyToolWindow(private val toolWindow: ToolWindow) {
         private val textArea = JTextArea(10, 30).apply {
             lineWrap = true
             wrapStyleWord = true
             border = BorderFactory.createEmptyBorder(10, 10, 10, 10)
         }
 
-        private lateinit var testFile: File
-        private var targetClassName: String = ""
-        private var targetClassPackage: String = ""
-        private var targetClassCode: String = ""
-        private var guidelines: String = ""
-        private var dependenciasCodigo: String = ""
-        private var parsedResponse: ParsedInitResponse? = null
-        private val errosDeTeste: MutableList<Map<String, String>> = mutableListOf()
+        lateinit var testFile: File
+        var targetClassName: String = ""
+        var targetClassPackage: String = ""
+        var targetClassCode: String = ""
+        var guidelines: String = ""
+        var dependenciasCodigo: String = ""
+        var parsedResponse: ParsedInitResponse? = null
 
-        private fun println(message: String) {
+        fun appendLog(message: String) {
+            println(message)
+
             ApplicationManager.getApplication().invokeLater {
                 val paneField = this::class.java.getDeclaredField("logsPane")
                 paneField.isAccessible = true
@@ -246,22 +258,22 @@ class MyToolWindowFactory : ToolWindowFactory {
             if (editor != null) {
                 val document = editor.document
                 val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document)
-                println("[INFO] Editor identificado. Arquivo ativo: ${psiFile?.virtualFile?.path}")
+                appendLog("[INFO] Editor identificado. Arquivo ativo: ${psiFile?.virtualFile?.path}")
                 if (psiFile is PsiJavaFile) {
                     if (psiFile.name.contains("Test", ignoreCase = true)) {
-                        println("[WARNING] Arquivo com nome 'Test' detectado. Operação cancelada para evitar autoanálise.")
+                        appendLog("[WARNING] Arquivo com nome 'Test' detectado. Operação cancelada para evitar autoanálise.")
                         return
                     }
-                    println("[INFO] Iniciando análise da classe '${psiFile.name}' para geração de testes.")
+                    appendLog("[INFO] Iniciando análise da classe '${psiFile.name}' para geração de testes.")
                     targetClassName = psiFile.name
                     targetClassPackage = psiFile.packageName
                     targetClassCode = document.text
                     enviarRequisicaoInit(project)
                 } else {
-                    println("[INFO] O arquivo ativo não é um arquivo Java.")
+                    appendLog("[INFO] O arquivo ativo não é um arquivo Java.")
                 }
             } else {
-                println("[INFO] Nenhum editor ativo encontrado.")
+                appendLog("[INFO] Nenhum editor ativo encontrado.")
             }
         }
 
@@ -279,8 +291,8 @@ class MyToolWindowFactory : ToolWindowFactory {
         }
 
         private fun enviarRequisicaoInit(project: Project) {
-            println("[PROCESSING] Classe alvo: $targetClassName (pacote: $targetClassPackage)")
-            println("[PROCESSING] Enviando requisição /init...")
+            appendLog("[PROCESSING] Classe alvo: $targetClassName (pacote: $targetClassPackage)")
+            appendLog("[PROCESSING] Enviando requisição /init...")
 
             try {
                 val payload = listOf(
@@ -288,7 +300,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                     "targetClassCode" to targetClassCode,
                     "targetClassPackage" to targetClassPackage
                 ).joinToString("&") { (k, v) ->
-                    "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+                    "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
                 }
                 val client = java.net.http.HttpClient.newHttpClient()
                 val request = java.net.http.HttpRequest.newBuilder()
@@ -297,7 +309,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                     .POST(java.net.http.HttpRequest.BodyPublishers.ofString(payload))
                     .build()
                 val response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-                println("[INFO] Código de status HTTP de /init: ${response.statusCode()}")
+                appendLog("[INFO] Código de status HTTP de /init: ${response.statusCode()}")
                 val objectMapper = jacksonObjectMapper()
                 val jsonTree = objectMapper.readTree(response.body())
                 // Parse analysisResponseDTO and customDependencies
@@ -310,19 +322,19 @@ class MyToolWindowFactory : ToolWindowFactory {
                 } else {
                     emptyList()
                 }
-                println("[INFO] Dependências vindas do /init (${customDeps.size}): ${customDeps.joinToString(", ")}")
+                appendLog("[INFO] Dependências vindas do /init (${customDeps.size}): ${customDeps.joinToString(", ")}")
                 dependenciasCodigo = buscarCodigoDasDependencias(project, customDeps)
-                println("[INFO] Códigos das dependências localizadas.")
-                println("[INFO] Conteúdo das dependências localizadas:\n$dependenciasCodigo")
+                appendLog("[INFO] Códigos das dependências localizadas.")
+                appendLog("[INFO] Conteúdo das dependências localizadas:\n$dependenciasCodigo")
                 guidelines = textArea.text
                 parsedResponse = ParsedInitResponse(
                     analysisResponseDTO = analysisMap,
                     customDependencies = customDeps
                 )
-                println("[INFO] Enviando dados de guidelines com tamanho ${guidelines.length} caracteres.")
+                appendLog("[INFO] Enviando dados de guidelines com tamanho ${guidelines.length} caracteres.")
                 enviarRequisicaoComplete(project)
             } catch (e: Exception) {
-                println("[ERROR] Erro ao enviar requisição /init: ${e.message}")
+                appendLog("[ERROR] Erro ao enviar requisição /init: ${e.message}")
                 e.printStackTrace()
             }
         }
@@ -330,14 +342,14 @@ class MyToolWindowFactory : ToolWindowFactory {
         // Removido: obterDependenciasDoPsi, pois dependências agora vêm do endpoint /init
 
         private fun enviarRequisicaoComplete(project: Project) {
-            println("[PROCESSING] Enviando requisição /complete...")
-            println("[PROCESSING] Payload enviado:")
-            println("targetClassName = $targetClassName")
-            println("targetClassCode (truncado) = ${targetClassCode.take(100)}...")
-            println("targetClassPackage = $targetClassPackage")
-            println("guidelines = ${guidelines.take(100)}...")
+            appendLog("[PROCESSING] Enviando requisição /complete...")
+            appendLog("[PROCESSING] Payload enviado:")
+            appendLog("targetClassName = $targetClassName")
+            appendLog("targetClassCode (truncado) = ${targetClassCode.take(100)}...")
+            appendLog("targetClassPackage = $targetClassPackage")
+            appendLog("guidelines = ${guidelines.take(100)}...")
             val dependenciesName = parsedResponse?.customDependencies?.joinToString(",") ?: ""
-            println("dependenciesName = $dependenciesName")
+            appendLog("dependenciesName = $dependenciesName")
 
             val completeRequestBody = listOf(
                 "targetClassName" to targetClassName,
@@ -347,9 +359,9 @@ class MyToolWindowFactory : ToolWindowFactory {
                 "dependencies" to dependenciasCodigo,
                 "dependenciesName" to dependenciesName
             ).joinToString("&") { (k, v) ->
-                "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+                "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
             }
-            println("[INFO] Payload completo para /complete possui ${completeRequestBody.length} caracteres.")
+            appendLog("[INFO] Payload completo para /complete possui ${completeRequestBody.length} caracteres.")
             val client = java.net.http.HttpClient.newHttpClient()
             val completeRequest = java.net.http.HttpRequest.newBuilder()
                 .uri(java.net.URI.create("http://localhost:8080/unitcat/api/complete"))
@@ -361,15 +373,17 @@ class MyToolWindowFactory : ToolWindowFactory {
                     completeRequest,
                     java.net.http.HttpResponse.BodyHandlers.ofString()
                 )
-                println("[INFO] Código de status HTTP de /complete: ${completeResponse.statusCode()}")
+                appendLog("[INFO] Código de status HTTP de /complete: ${completeResponse.statusCode()}")
                 val objectMapper = jacksonObjectMapper()
                 val completeResponseDTO = objectMapper.readValue(
                     completeResponse.body(),
                     CompleteResponseDTO::class.java
                 )
-                println("[INFO] Resposta /complete recebida.")
-                println("[INFO] Classe gerada: ${completeResponseDTO.generatedTestClassFqn}")
-                println(
+                // Store FQN for retries
+                this@MyToolWindowFactory.latestGeneratedTestClassFqn = completeResponseDTO.generatedTestClassFqn
+                appendLog("[INFO] Resposta /complete recebida.")
+                appendLog("[INFO] Classe gerada: ${completeResponseDTO.generatedTestClassFqn}")
+                appendLog(
                     "[INFO] Código gerado (preview):\n${
                         completeResponseDTO.generatedTestCode.lines().take(10).joinToString("\n")
                     }"
@@ -378,85 +392,50 @@ class MyToolWindowFactory : ToolWindowFactory {
                 criarClasseDeTeste(project, completeResponseDTO.generatedTestCode)
             } catch (e: Exception) {
                 e.printStackTrace()
-                println("[ERROR] Erro ao enviar requisição /complete: ${e.message}")
+                appendLog("[ERROR] Erro ao enviar requisição /complete: ${e.message}")
             }
         }
 
         private fun criarClasseDeTeste(project: Project, testClassContentRaw: String) {
-            println("[PROCESSING] Iniciando criação da classe de teste...")
+            appendLog("[PROCESSING] Iniciando criação da classe de teste...")
             val testClassContent = testClassContentRaw
                 .removePrefix("```java")
                 .removeSuffix("```")
                 .trim()
             val packageLine = testClassContent.lines().firstOrNull { it.trim().startsWith("package ") }
             val packageName = packageLine?.removePrefix("package")?.removeSuffix(";")?.trim() ?: ""
-            println("[INFO] Pacote identificado: '$packageName'")
+            appendLog("[INFO] Pacote identificado: '$packageName'")
             val packagePath = packageName.replace('.', '/')
             val testRoot = File(project.basePath, "src/test/java/$packagePath")
-            println("[INFO] Diretório alvo: ${testRoot.absolutePath}")
+            appendLog("[INFO] Diretório alvo: ${testRoot.absolutePath}")
             if (!testRoot.exists()) {
                 testRoot.mkdirs()
             }
             val classNameRegex = Regex("""class\s+(\w+)""")
             val match = classNameRegex.find(testClassContent)
             val className = match?.groups?.get(1)?.value ?: "GeneratedTest"
-            println("[INFO] Nome da classe de teste gerada: $className")
+            appendLog("[INFO] Nome da classe de teste gerada: $className")
             testFile = File(testRoot, "$className.java")
-            println("[INFO] Salvando classe de teste em: ${testFile.absolutePath}")
+            appendLog("[INFO] Salvando classe de teste em: ${testFile.absolutePath}")
             testFile.writeText(testClassContent)
-            println("[INFO] Conteúdo da nova classe de teste possui ${testClassContent.length} caracteres.")
-            println("[INFO] Arquivo salvo com sucesso.")
+            appendLog("[INFO] Conteúdo da nova classe de teste possui ${testClassContent.length} caracteres.")
+            appendLog("[INFO] Arquivo salvo com sucesso.")
 
             val newVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
                 .refreshAndFindFileByIoFile(testFile)
             if (newVirtualFile != null) {
-                println("[INFO] Tentando abrir a classe de teste no editor: ${testFile.name}")
+                appendLog("[INFO] Tentando abrir a classe de teste no editor: ${testFile.name}")
                 FileEditorManager.getInstance(project).openFile(newVirtualFile, true)
-                println("[INFO] Classe de teste aberta com sucesso.")
+                appendLog("[INFO] Classe de teste aberta com sucesso.")
             } else {
-                println("[ERROR] Falha ao localizar o arquivo virtual para: ${testFile.absolutePath}")
+                appendLog("[ERROR] Falha ao localizar o arquivo virtual para: ${testFile.absolutePath}")
             }
 
-            ApplicationManager.getApplication().executeOnPooledThread {
-                val psiClass = ApplicationManager.getApplication().runReadAction<com.intellij.psi.PsiClass?> {
-                    com.intellij.psi.JavaPsiFacade.getInstance(project)
-                        .findClass(
-                            "$packageName.$className",
-                            com.intellij.psi.search.GlobalSearchScope.projectScope(project)
-                        )
-                }
-
-                if (psiClass != null) {
-                    ApplicationManager.getApplication().invokeLater {
-                        val runManager = com.intellij.execution.RunManager.getInstance(project)
-                        val configurationFactory = com.intellij.execution.junit.JUnitConfigurationType
-                            .getInstance().configurationFactories[0]
-                        val settings = runManager.createConfiguration("$className [UnitCat]", configurationFactory)
-                        val configuration = settings.configuration as com.intellij.execution.junit.JUnitConfiguration
-
-                        configuration.setMainClass(psiClass)
-                        configuration.setModule(ModuleManager.getInstance(project).modules.firstOrNull())
-
-                        runManager.addConfiguration(settings)
-                        runManager.selectedConfiguration = settings
-
-                        executeConfiguration(
-                            settings,
-                            com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance()
-                        )
-                        println("[INFO] Classe de teste executada diretamente via JUnit runner.")
-                    }
-                } else {
-                    println("[ERROR] Não foi possível localizar a classe de teste '$packageName.$className' para execução.")
-                }
-                ApplicationManager.getApplication().invokeLater {
-                    println("[PROCESSING] Aguardando MavenProjectsManager carregar projetos")
-                    executarGoalMaven(project, 0)
-                }
-            }
+            val fqn = if (packageName.isNotBlank()) "$packageName.$className" else className
+            compileBeforeJUnit(project, fqn)
         }
 
-        private fun substituirMetodosNoArquivo(testFile: File, updatesJson: String) {
+        fun substituirMetodosNoArquivo(testFile: File, updatesJson: String) {
             val objectMapper = jacksonObjectMapper()
 
             data class ModifiedTestMethod(val methodName: String, val modifiedCode: String)
@@ -584,7 +563,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                     val update = updatesMap[block.name]
                     if (update != null) {
                         newLines.addAll(update.modifiedCode.lines())
-                        println("[PROCESSING] Método '${block.name}' substituído com sucesso.")
+                        appendLog("[PROCESSING] Método '${block.name}' substituído com sucesso.")
                     } else {
                         newLines.addAll(block.originalCodeLines)
                     }
@@ -601,161 +580,385 @@ class MyToolWindowFactory : ToolWindowFactory {
             try {
                 val updates = objectMapper.readValue<UpdatePayload>(updatesJson)
                 val original = testFile.readText()
-                println("[INFO] Tamanho do arquivo original para refatoração: ${original.length} caracteres.")
+                appendLog("[INFO] Tamanho do arquivo original para refatoração: ${original.length} caracteres.")
                 val updated = refactorTestClass(original, updates)
                 testFile.writeText(updated)
-                println("[INFO] Tamanho do arquivo refatorado: ${updated.length} caracteres.")
-                println("[INFO] Classe Java atualizada com sucesso com base no JSON do /retry.")
+                appendLog("[INFO] Tamanho do arquivo refatorado: ${updated.length} caracteres.")
+                appendLog("[INFO] Classe Java atualizada com sucesso com base no JSON do /retry.")
             } catch (e: Exception) {
-                println("[ERROR] Erro ao processar JSON de atualização: ${e.message}")
+                appendLog("[ERROR] Erro ao processar JSON de atualização: ${e.message}")
                 e.printStackTrace()
             }
         }
 
-        private fun executarGoalMaven(
-            project: Project,
-            retryCount: Int = 0,
-            goal: String = "test"
-        ) {
-            val mavenProjects = org.jetbrains.idea.maven.project.MavenProjectsManager.getInstance(project).projects
-            println("[INFO] MavenProjectsManager encontrou ${mavenProjects.size} projetos")
-            val mavenProject = mavenProjects.firstOrNull()
-            if (mavenProject == null) {
-                println("[ERROR] Não há projetos Maven registrados ainda; pulando execução")
-                return
-            }
+//        private fun executarGoalMaven(
+//            project: Project,
+//            retryCount: Int = 0,
+//            goal: String = "test"
+//        ) {
+//            val mavenProjects = org.jetbrains.idea.maven.project.MavenProjectsManager.getInstance(project).projects
+//            appendLog("[INFO] MavenProjectsManager encontrou ${mavenProjects.size} projetos")
+//            val mavenProject = mavenProjects.firstOrNull()
+//            if (mavenProject == null) {
+//                appendLog("[ERROR] Não há projetos Maven registrados ainda; pulando execução")
+//                return
+//            }
+//
+//            val projectDirPath = mavenProject.directory
+//            appendLog("[INFO] Diretório do projeto Maven: $projectDirPath")
+//
+//            val parameters = MavenRunnerParameters(
+//                true,
+//                projectDirPath,
+//                null as String?,
+//                listOf(goal),
+//                emptyList()
+//            )
+//
+//            val settings = MavenRunnerSettings()
+//            val generalSettings: MavenGeneralSettings? = null
+//
+//            val outputStream = ByteArrayOutputStream()
+//            val processListener = object : ProcessAdapter() {
+//                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+//                    super.onTextAvailable(event, outputType)
+//                    print("[MAVEN] ${event.text.trim()}")
+//                    outputStream.write(event.text.toByteArray())
+//                }
+//
+//                override fun processTerminated(event: ProcessEvent) {
+//                    super.processTerminated(event)
+//                    appendLog("[PROCESSING] Iniciando execução do Maven com retryCount = $retryCount")
+//                    if (retryCount >= 5) {
+//                        appendLog("[PROCESSING] Limite de 5 tentativas de retry atingido.")
+//                        return
+//                    }
+//                    val logContent = outputStream.toString(Charsets.UTF_8.name())
+//                    appendLog("[INFO] Logs Maven capturados.")
+//                    appendLog("[INFO] Conteúdo completo do log Maven: \n$logContent")
+//
+//                    val errosDeTesteFinal = MyToolWindowFactory.errosDeTesteGlobal
+//                    appendLog("📋 [INFO] Lista final de testes com falha:")
+//
+//                    errosDeTesteFinal.forEachIndexed { index, erro ->
+//                        appendLog("🔹 Erro ${index + 1}:")
+//                        appendLog("   Método real: ${erro["nomeMetodo"]}")
+//                        appendLog("   DisplayName: ${erro["displayName"]}")
+//                        appendLog("   Mensagem de erro: ${erro["mensagemErro"]?.take(300)}")
+//                        appendLog("   Stacktrace: ${erro["stacktrace"]?.take(300)}")
+//                        appendLog("   Código do método:\n${erro["codigoMetodo"]?.take(1000)}")
+//                        appendLog("----------------------------------------------------")
+//                    }
+//
+//                    val objectMapper = jacksonObjectMapper()
+//                    appendLog("[INFO] Estrutura de dados completa dos testes com falha:")
+//                    appendLog(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(errosDeTesteFinal))
+//
+//                    appendLog("[PROCESSING] Enviando requisição /retry com ${errosDeTesteFinal.size} testes falhos...")
+//                    appendLog("[PROCESSING] Construindo corpo da requisição /retry...")
+//
+//                    val testClassCodeAtual: String = try {
+//                        val vFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+//                            .findFileByIoFile(testFile)
+//                        if (vFile != null) {
+//                            val doc = FileDocumentManager.getInstance().getDocument(vFile)
+//                            doc?.text ?: testFile.readText()
+//                        } else {
+//                            testFile.readText()
+//                        }
+//                    } catch (_: Exception) {
+//                        testFile.readText()
+//                    }
+//
+//                    val dependenciesNameRetry = parsedResponse?.customDependencies?.joinToString(",") ?: ""
+//                    val formParams = mutableListOf(
+//                        "targetClassName" to targetClassName,
+//                        "targetClassPackage" to targetClassPackage,
+//                        "targetClassCode" to targetClassCode,
+//                        "testClassCode" to testClassCodeAtual,
+//                        "dependencies" to dependenciasCodigo,
+//                        "dependenciesName" to dependenciesNameRetry
+//                    )
+//                    val failingTestsJson = objectMapper.writeValueAsString(errosDeTesteFinal)
+//                    formParams.add("failingTestDetailsRequestDTOS" to failingTestsJson)
+//
+//                    val retryRequestBody = formParams.joinToString("&") { (key, value) ->
+//                        "${java.net.URLEncoder.encode(key, "UTF-8")}=${java.net.URLEncoder.encode(value, "UTF-8")}"
+//                    }
+//
+//                    appendLog("[INFO] Processo Maven finalizado (código: ${event.exitCode})")
+//
+//                    val errorLines = logContent.lines()
+//                        .filter { it.contains("[ERROR]") || it.contains("COMPILATION ERROR") || it.contains("BUILD FAILURE") }
+//                        .joinToString("\n")
+//
+//                    if (errorLines.isNotEmpty()) {
+//                        appendLog("[ERROR] Foram encontrados erros '[ERROR]' no log Maven.")
+//                        appendLog("[PROCESSING] Enviando requisição HTTP para /retry...")
+//                        val retryRequest = java.net.http.HttpRequest.newBuilder()
+//                            .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
+//                            .header("Content-Type", "application/x-www-form-urlencoded")
+//                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(retryRequestBody))
+//                            .build()
+//                        try {
+//                            val retryResponse = java.net.http.HttpClient.newHttpClient().send(
+//                                retryRequest,
+//                                java.net.http.HttpResponse.BodyHandlers.ofString()
+//                            )
+//                            appendLog("[INFO] Resposta /retry recebida:")
+//                            appendLog("[INFO] Conteúdo:\n${retryResponse.body()}")
+//
+//                            val responseJson = retryResponse.body()
+//                            val retryResultNode = objectMapper.readTree(responseJson)
+//                            appendLog("[PROCESSING] Resposta JSON de /retry parseada com sucesso.")
+//                            substituirMetodosNoArquivo(testFile, retryResponse.body())
+//                            appendLog("[INFO] Classe de teste atualizada com métodos do /retry.")
+//                            executarGoalMaven(project, retryCount + 1)
+//                            val modifiedMethods = retryResultNode.get("modifiedTestMethods")
+//                            val requiredImports = retryResultNode.get("requiredNewImports")
+//                            appendLog("[PROCESSING] Quantidade de métodos modificados recebidos: ${modifiedMethods?.size() ?: 0}")
+//                            appendLog("[PROCESSING] Quantidade de novos imports recebidos: ${requiredImports?.size() ?: 0}")
+//                        } catch (e: Exception) {
+//                            e.printStackTrace()
+//                            appendLog("[ERROR] Falha ao chamar o endpoint /retry: ${e.message}")
+//                        }
+//                    } else {
+//                        appendLog("[INFO] Nenhum erro '[ERROR]' identificado no log Maven.")
+//                        appendLog("[INFO] Build Maven bem-sucedido, sem falhas nos testes.")
+//                    }
+//                }
+//            }
+//
+//            ApplicationManager.getApplication().invokeAndWait { FileDocumentManager.getInstance().saveAllDocuments() }
+//
+//            MavenRunConfigurationType.runConfiguration(
+//                project,
+//                parameters,
+//                generalSettings,
+//                settings,
+//                { descriptor ->
+//                    val handler = descriptor.processHandler
+//                    if (handler != null) {
+//                        handler.addProcessListener(processListener)
+//                    } else {
+//                        appendLog("[ERROR] Erro: ProcessHandler é nulo após o início do processo.")
+//                    }
+//                },
+//                false
+//            )
+//        }
 
-            val projectDirPath = mavenProject.directory
-            println("[INFO] Diretório do projeto Maven: $projectDirPath")
+    }
 
-            val parameters = MavenRunnerParameters(
-                true,
-                projectDirPath,
-                null as String?,
-                listOf(goal),
-                emptyList()
-            )
-
-            val settings = MavenRunnerSettings()
-            val generalSettings: MavenGeneralSettings? = null
-
-            val outputStream = ByteArrayOutputStream()
-            val processListener = object : ProcessAdapter() {
-                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
-                    super.onTextAvailable(event, outputType)
-                    println("[INFO] Saída Maven: ${event.text.trim()}")
-                    outputStream.write(event.text.toByteArray())
+    private fun registrarListenerDeTeste(project: Project) {
+        val connection: MessageBusConnection = project.messageBus.connect(project as Disposable)
+        connection.subscribe(SMTRunnerEventsListener.TEST_STATUS, object : SMTRunnerEventsListener {
+            override fun onTestingStarted(p0: SMTestProxy.SMRootTestProxy) {}
+            override fun onTestingFinished(root: SMTestProxy.SMRootTestProxy) {
+                if (errosDeTesteGlobal.isNotEmpty()) {
+                    myToolWindowInstance.appendLog("[INFO] Testes finalizados com falhas. Iniciando retry via API.")
+                    processRetry(project)
                 }
-
-                override fun processTerminated(event: ProcessEvent) {
-                    super.processTerminated(event)
-                    println("[PROCESSING] Iniciando execução do Maven com retryCount = $retryCount")
-                    if (retryCount >= 5) {
-                        println("[PROCESSING] Limite de 5 tentativas de retry atingido.")
-                        return
-                    }
-                    val logContent = outputStream.toString(Charsets.UTF_8.name())
-                    println("[INFO] Logs Maven capturados.")
-                    println("[INFO] Conteúdo completo do log Maven: \n$logContent")
-
-                    val errosDeTesteFinal = errosDeTeste.toList()
-                    errosDeTeste.clear()
-
-                    val objectMapper = jacksonObjectMapper()
-                    println("[INFO] Estrutura de dados completa dos testes com falha:")
-                    println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(errosDeTesteFinal))
-
-                    println("[PROCESSING] Enviando requisição /retry com ${errosDeTesteFinal.size} testes falhos...")
-                    println("[PROCESSING] Construindo corpo da requisição /retry...")
-            val testClassCodeAtual: String = try {
-                val vFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-                    .findFileByIoFile(testFile)
-                if (vFile != null) {
-                    val doc = FileDocumentManager.getInstance().getDocument(vFile)
-                    doc?.text ?: testFile.readText()
-                } else {
-                    testFile.readText()
-                }
-            } catch (_: Exception) {
-                testFile.readText()
             }
+            override fun onTestsCountInSuite(p0: Int) {}
+            override fun onTestStarted(p0: SMTestProxy) {}
+            override fun onTestIgnored(p0: SMTestProxy) {}
+            override fun onSuiteFinished(p0: SMTestProxy) {}
+            override fun onSuiteStarted(p0: SMTestProxy) {}
+            override fun onCustomProgressTestsCategory(p0: String?, p1: Int) {}
+            override fun onCustomProgressTestStarted() {}
+            override fun onCustomProgressTestFailed() {}
+            override fun onCustomProgressTestFinished() {}
+            override fun onSuiteTreeNodeAdded(p0: SMTestProxy) {}
+            override fun onSuiteTreeStarted(p0: SMTestProxy) {}
+            override fun onTestFinished(testProxy: SMTestProxy) {}
+            override fun onTestFailed(testProxy: SMTestProxy) {
+                myToolWindowInstance.appendLog("[INFO] Teste com falha encontrada.")
 
-                    val dependenciesNameRetry = parsedResponse?.customDependencies?.joinToString(",") ?: ""
-                    val formParams = mutableListOf(
-                        "targetClassName" to targetClassName,
-                        "targetClassPackage" to targetClassPackage,
-                        "targetClassCode" to targetClassCode,
-                        "testClassCode" to testClassCodeAtual,
-                        "dependencies" to dependenciasCodigo,
-                        "dependenciesName" to dependenciesNameRetry
+                val project = ProjectManager.getInstance().openProjects.firstOrNull() ?: return
+                ApplicationManager.getApplication().runReadAction {
+                    val location = testProxy.getLocation(
+                        project,
+                        com.intellij.psi.search.GlobalSearchScope.projectScope(project)
                     )
-                    val failingTestsJson = objectMapper.writeValueAsString(errosDeTesteFinal)
-                    formParams.add("failingTestDetailsRequestDTOS" to failingTestsJson)
+                    val psiElement = location?.psiElement
+                    val psiMethod = PsiTreeUtil.getContextOfType(
+                        psiElement,
+                        PsiMethod::class.java,
+                        false
+                    )
+                    val nomeMetodoReal = psiMethod?.name ?: testProxy.name
+                    val erro = mapOf(
+                        "method_name" to nomeMetodoReal,
+                        "error_message" to (testProxy.errorMessage ?: ""),
+                        "stack_trace" to (testProxy.stacktrace ?: "")
+                    )
 
-                    val retryRequestBody = formParams.joinToString("&") { (key, value) ->
-                        "${java.net.URLEncoder.encode(key, "UTF-8")}=${java.net.URLEncoder.encode(value, "UTF-8")}"
-                    }
-
-                    println("[INFO] Processo Maven finalizado (código: ${event.exitCode})")
-
-                    val errorLines = logContent.lines()
-                        .filter { it.contains("[ERROR]") || it.contains("COMPILATION ERROR") || it.contains("BUILD FAILURE") }
-                        .joinToString("\n")
-
-                    if (errorLines.isNotEmpty()) {
-                        println("[ERROR] Foram encontrados erros '[ERROR]' no log Maven.")
-                        println("[PROCESSING] Enviando requisição HTTP para /retry...")
-                        val retryRequest = java.net.http.HttpRequest.newBuilder()
-                            .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
-                            .header("Content-Type", "application/x-www-form-urlencoded")
-                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(retryRequestBody))
-                            .build()
-                        try {
-                            val retryResponse = java.net.http.HttpClient.newHttpClient().send(
-                                retryRequest,
-                                java.net.http.HttpResponse.BodyHandlers.ofString()
-                            )
-                            println("[INFO] Resposta /retry recebida:")
-                            println("[INFO] Conteúdo:\n${retryResponse.body()}")
-
-                            val responseJson = retryResponse.body()
-                            val retryResultNode = objectMapper.readTree(responseJson)
-                            println("[PROCESSING] Resposta JSON de /retry parseada com sucesso.")
-                            substituirMetodosNoArquivo(testFile, retryResponse.body())
-                            println("[INFO] Classe de teste atualizada com métodos do /retry.")
-                            executarGoalMaven(project, retryCount + 1)
-                            val modifiedMethods = retryResultNode.get("modifiedTestMethods")
-                            val requiredImports = retryResultNode.get("requiredNewImports")
-                            println("[PROCESSING] Quantidade de métodos modificados recebidos: ${modifiedMethods?.size() ?: 0}")
-                            println("[PROCESSING] Quantidade de novos imports recebidos: ${requiredImports?.size() ?: 0}")
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            println("[ERROR] Falha ao chamar o endpoint /retry: ${e.message}")
-                        }
-                    } else {
-                        println("[INFO] Nenhum erro '[ERROR]' identificado no log Maven.")
-                        println("[INFO] Build Maven bem-sucedido, sem falhas nos testes.")
-                    }
+                    myToolWindowInstance.appendLog("[INFO] Detalhes do teste com falha: $erro")
+                    errosDeTesteGlobal.add(erro)
                 }
             }
+        })
+    }
 
-            ApplicationManager.getApplication().invokeAndWait { FileDocumentManager.getInstance().saveAllDocuments() }
-
-            MavenRunConfigurationType.runConfiguration(
-                project,
-                parameters,
-                generalSettings,
-                settings,
-                { descriptor ->
-                    val handler = descriptor.processHandler
-                    if (handler != null) {
-                        handler.addProcessListener(processListener)
-                    } else {
-                        println("[ERROR] Erro: ProcessHandler é nulo após o início do processo.")
-                    }
-                },
-                false
-            )
+    private fun processRetry(project: Project) {
+        val objectMapper = jacksonObjectMapper()
+        val failingTestsJson = objectMapper.writeValueAsString(errosDeTesteGlobal)
+        val formParams = listOf(
+            "targetClassName" to myToolWindowInstance.targetClassName,
+            "targetClassPackage" to myToolWindowInstance.targetClassPackage,
+            "targetClassCode" to myToolWindowInstance.targetClassCode,
+            "testClassCode" to myToolWindowInstance.testFile.readText(),
+            "dependencies" to myToolWindowInstance.dependenciasCodigo,
+            "dependenciesName" to (myToolWindowInstance.parsedResponse?.customDependencies?.joinToString(",") ?: ""),
+            "failingTestDetailsRequestDTOS" to failingTestsJson
+        ).joinToString("&") { (k, v) ->
+            "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
+        }
+        try {
+            val request = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(formParams))
+                .build()
+            val response = java.net.http.HttpClient.newHttpClient()
+                .send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+            myToolWindowInstance.appendLog("[INFO] Resposta /retry: ${response.body()}")
+            // substituirMetodosNoArquivo call
+            try {
+                val testFile = myToolWindowInstance.testFile
+                myToolWindowInstance.substituirMetodosNoArquivo(testFile, response.body())
+//                // Refresh VFS and PSI to pick up updated testFile
+//                val vFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+//                    .refreshAndFindFileByIoFile(testFile)
+//                vFile?.refresh(false, false)
+//                val document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance()
+//                    .getDocument(vFile!!)
+//                if (document != null) {
+//                    com.intellij.openapi.fileEditor.FileDocumentManager.getInstance()
+//                        .reloadFromDisk(document)
+//                }
+            } catch (e: Exception) {
+                myToolWindowInstance.appendLog("[ERROR] Falha ao substituir métodos no arquivo: ${e.message}")
+            }
+            errosDeTesteGlobal.clear()
+            // Schedule compilation on EDT
+            ApplicationManager.getApplication().invokeLater {
+                compileBeforeJUnit(project, latestGeneratedTestClassFqn)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            myToolWindowInstance.appendLog("[ERROR] Falha no retry: ${e.message}")
         }
     }
+
+    private fun compileBeforeJUnit(project: Project, fqn: String) {
+        myToolWindowInstance.appendLog("[DEBUG] compileBeforeJUnit called with fqn='$fqn'")
+        val lastDot = fqn.lastIndexOf('.')
+        val packageName = if (lastDot != -1) fqn.substring(0, lastDot) else ""
+        val className = if (lastDot != -1) fqn.substring(lastDot + 1) else fqn
+        myToolWindowInstance.appendLog("[DEBUG] Iniciando compilação para $packageName.$className...")
+        val compileScope = CompilerManager.getInstance(project).createProjectCompileScope(project)
+        ApplicationManager.getApplication().invokeLater {
+            CompilerManager.getInstance(project).make(compileScope) { aborted, errorsCount, _, compileContext ->
+                if (aborted || errorsCount > 0) {
+                    myToolWindowInstance.appendLog("[INFO] Erros de compilação detectados: $errorsCount. Coletando mensagens.")
+                    compileContext.getMessages(CompilerMessageCategory.ERROR).forEach { msg ->
+                        myToolWindowInstance.appendLog("[DEBUG] Compilation error message received: ${msg.message}")
+                        myToolWindowInstance.appendLog("[DEBUG] VirtualFile path: ${msg.virtualFile.path}")
+                        // Determine method based on error line
+                        val vFile = msg.virtualFile
+                        val document = FileDocumentManager.getInstance().getDocument(vFile)
+                        // Try to use msg.lineNumber, fallback to msg.line if necessary
+                        val lineNum = try {
+                            val ln = msg.javaClass.getMethod("getLineNumber").invoke(msg) as? Int
+                            ln?.takeIf { it >= 1 } ?: (
+                                try { msg.javaClass.getMethod("getLine").invoke(msg) as? Int } catch (_: Exception) { null }
+                            )?.takeIf { it >= 1 } ?: 1
+                        } catch (_: Exception) {
+                            try {
+                                val ln = msg.javaClass.getMethod("getLine").invoke(msg) as? Int
+                                ln?.takeIf { it >= 1 } ?: 1
+                            } catch (_: Exception) {
+                                1
+                            }
+                        }
+                        myToolWindowInstance.appendLog("[DEBUG] Determined lineNum: $lineNum")
+                        val offset = document?.getLineStartOffset(lineNum - 1) ?: 0
+                        myToolWindowInstance.appendLog("[DEBUG] Calculated offset for error: $offset")
+                        val psiFile = PsiManager.getInstance(project).findFile(vFile)
+                        val psiElement = psiFile?.findElementAt(offset)
+                        val psiMethod = PsiTreeUtil.getParentOfType(
+                            psiElement, PsiMethod::class.java, false
+                        )
+                        myToolWindowInstance.appendLog("[DEBUG] Resolved psiMethod: ${psiMethod?.name}")
+                        val methodName = psiMethod?.name
+                            ?: vFile.name.substringBeforeLast(".java")
+                        val errorMap = mapOf(
+                            "method_name" to methodName,
+                            "error_message" to msg.message,
+                            "stack_trace" to msg.message
+                        )
+                        myToolWindowInstance.appendLog("[DEBUG] Adding errorMap: method_name=$methodName")
+                        errosDeTesteGlobal.add(errorMap)
+                    }
+                    processRetry(project)
+                } else {
+                    myToolWindowInstance.appendLog("[DEBUG] Compilação bem-sucedida para $packageName.$className. Executando JUnit Runner.")
+                    reexecuteJUnitRunner(project, latestGeneratedTestClassFqn)
+                }
+            }
+        }
+    }
+
+    private fun reexecuteJUnitRunner(project: Project, generatedTestClassFqn: String) {
+        myToolWindowInstance.appendLog("[DEBUG] reexecuteJUnitRunner called with generatedTestClassFqn='$generatedTestClassFqn'")
+        // Parse fully-qualified name into package and class
+        val lastDot = generatedTestClassFqn.lastIndexOf('.')
+        val packageName = if (lastDot != -1) generatedTestClassFqn.substring(0, lastDot) else ""
+        val className = if (lastDot != -1) generatedTestClassFqn.substring(lastDot + 1) else generatedTestClassFqn
+        myToolWindowInstance.appendLog("[DEBUG] Parsed packageName='$packageName', className='$className'")
+        myToolWindowInstance.appendLog("[DEBUG] Scheduling execution on pooled thread for $packageName.$className")
+        ApplicationManager.getApplication().executeOnPooledThread {
+            myToolWindowInstance.appendLog("[DEBUG] In pooled thread, resolving PsiClass for '$packageName.$className'")
+            val psiClass = ApplicationManager.getApplication().runReadAction<com.intellij.psi.PsiClass?> {
+                com.intellij.psi.JavaPsiFacade.getInstance(project)
+                    .findClass(
+                        if (packageName.isNotBlank()) "$packageName.$className" else className,
+                        com.intellij.psi.search.GlobalSearchScope.projectScope(project)
+                    )
+            }
+
+            if (psiClass != null) {
+                ApplicationManager.getApplication().invokeLater {
+                    myToolWindowInstance.appendLog("[DEBUG] PsiClass resolved: '${psiClass.name}'. Preparing JUnit run configuration.")
+                    val runManager = com.intellij.execution.RunManager.getInstance(project)
+                    val configurationFactory = com.intellij.execution.junit.JUnitConfigurationType
+                        .getInstance().configurationFactories[0]
+                    val settings = runManager.createConfiguration("$className [UnitCat]", configurationFactory)
+                    val configuration = settings.configuration as com.intellij.execution.junit.JUnitConfiguration
+
+                    configuration.setMainClass(psiClass)
+                    configuration.setModule(ModuleManager.getInstance(project).modules.firstOrNull())
+
+                    runManager.addConfiguration(settings)
+                    runManager.selectedConfiguration = settings
+
+                    executeConfiguration(
+                        settings,
+                        com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance()
+                    )
+                    myToolWindowInstance.appendLog("[INFO] Classe de teste executada diretamente via JUnit runner.")
+                }
+            } else {
+                myToolWindowInstance.appendLog("[DEBUG][ERROR] PsiClass not found for '$packageName.$className'")
+            }
+        }
+    }
+
+    companion object {
+        @JvmStatic
+        val errosDeTesteGlobal: MutableList<Map<String, String>> = mutableListOf()
+    }
 }
+

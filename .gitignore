@@ -42,3 +42,4 @@ coverage/
 *.bak
 *.swp
 *.tmp
+server/poc/src/main/resources/application.yaml

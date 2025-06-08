@@ -33,11 +33,11 @@ import java.awt.Dimension
 import java.awt.RenderingHints
 import java.io.File
 import java.net.URLEncoder
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import javax.swing.*
-import javax.swing.text.DefaultEditorKit
-import javax.swing.text.SimpleAttributeSet
-import javax.swing.text.StyleConstants
-import javax.swing.text.StyledDocument
 
 data class ParsedInitResponse(
     val analysisResponseDTO: Map<String, Any>?,
@@ -51,10 +51,8 @@ data class CompleteResponseDTO(
 
 class MyToolWindowFactory : ToolWindowFactory {
 
-    // Store the FQN of the latest generated test class for retry cycles
     private var latestGeneratedTestClassFqn: String = ""
 
-    // Hold a reference to the tool window instance
     private lateinit var myToolWindowInstance: MyToolWindow
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
@@ -85,44 +83,44 @@ class MyToolWindowFactory : ToolWindowFactory {
         fun appendLog(message: String) {
             println(message)
 
+            val closingBracketIndex = message.indexOf("]") + 1
+            val rawType = if (closingBracketIndex > 0) message.substring(1, closingBracketIndex - 1).trim() else ""
+            val restOfMessage = if (closingBracketIndex > 0) message.substring(closingBracketIndex) else message
+
+            val emoji = when (rawType.uppercase()) {
+                "INFO" -> "ℹ️"
+                "ERROR" -> "❌"
+                "PROCESSING" -> "🔄"
+                "WARNING" -> "⚠️"
+                else -> ""
+            }
+
             ApplicationManager.getApplication().invokeLater {
-                val paneField = this::class.java.getDeclaredField("logsPane")
-                paneField.isAccessible = true
-                val logsPaneInstance = paneField.get(this) as JTextPane
-                val doc = logsPaneInstance.styledDocument as StyledDocument
+                logsPane.append("$emoji $restOfMessage\n")
+                logsPane.caretPosition = logsPane.document.length
+            }
+        }
 
-                val closingBracketIndex = message.indexOf("]") + 1
-                val rawType = if (closingBracketIndex > 0) message.substring(1, closingBracketIndex - 1).trim() else ""
-                val restOfMessage = if (closingBracketIndex > 0) message.substring(closingBracketIndex) else message
-
-                val fieldWidth = 10
-
-                val defaultAttr = SimpleAttributeSet().also {
-                    StyleConstants.setForeground(it, JBColor.BLACK)
-                }
-                val typeAttr = SimpleAttributeSet().also {
-                    when {
-                        rawType.equals("INFO", ignoreCase = true) -> StyleConstants.setForeground(it, JBColor.BLUE)
-                        rawType.equals("ERROR", ignoreCase = true) -> StyleConstants.setForeground(it, JBColor.RED)
-                        rawType.equals("PROCESSING", ignoreCase = true) -> StyleConstants.setForeground(it, JBColor.YELLOW)
-                        else -> StyleConstants.setForeground(it, JBColor.WHITE)
-                    }
-                }
-
-                doc.insertString(doc.length, "[", defaultAttr)
-                doc.insertString(doc.length, rawType, typeAttr)
-                val paddingCount = (fieldWidth - rawType.length).coerceAtLeast(0)
-                val padding = " ".repeat(paddingCount)
-                doc.insertString(doc.length, "$padding]", defaultAttr)
-                doc.insertString(doc.length, " $restOfMessage\n", defaultAttr)
-
-                logsPaneInstance.caretPosition = doc.length
+        fun <T> executeWithWaitingLogs(
+            tag: String,
+            block: () -> T
+        ): T {
+            val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+            val future: ScheduledFuture<*> = scheduler.scheduleAtFixedRate(
+                { appendLog("⏳[$tag] Aguardando resposta da API…") },
+                5, 5, TimeUnit.SECONDS
+            )
+            return try {
+                block()
+            } finally {
+                future.cancel(true)
+                scheduler.shutdown()
             }
         }
 
         fun getContent() = buildUI()
 
-        private lateinit var logsPane: JTextPane
+        private lateinit var logsPane: JTextArea
 
         private fun buildUI() = JBPanel<JBPanel<*>>().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -180,18 +178,18 @@ class MyToolWindowFactory : ToolWindowFactory {
             add(monitorLabel)
             add(Box.createVerticalStrut(12))
 
-            val logsPane = JTextPane().apply {
+            val logsPane = JTextArea().apply {
                 isEditable = false
                 background = JBColor(Color(0x1B1B1B), Color(0x1B1B1B))
-                caretColor = JBColor.BLACK
-                styledDocument.putProperty(DefaultEditorKit.EndOfLineStringProperty, "\n")
-                this.font = this.font.deriveFont(14f)
-                this.foreground = JBColor.BLACK
+                font = font.deriveFont(14f)
+                foreground = JBColor.BLACK
+                lineWrap = true
+                wrapStyleWord = true
             }
             this@MyToolWindow.logsPane = logsPane
             val logsScroll = JScrollPane(logsPane).apply {
                 horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_NEVER
+                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
                 preferredSize = Dimension(Short.MAX_VALUE.toInt(), 300)
                 maximumSize = Dimension(Short.MAX_VALUE.toInt(), 300)
                 alignmentX = Component.LEFT_ALIGNMENT
@@ -255,20 +253,26 @@ class MyToolWindowFactory : ToolWindowFactory {
         private fun onGerarTestesClicked() {
             val project = toolWindow.project
             val editor = FileEditorManager.getInstance(project).selectedTextEditor
+
             if (editor != null) {
                 val document = editor.document
                 val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document)
-                appendLog("[INFO] Editor identificado. Arquivo ativo: ${psiFile?.virtualFile?.path}")
+                appendLog("🔍 Editor identificado: ${psiFile?.virtualFile?.path}")
+
                 if (psiFile is PsiJavaFile) {
                     if (psiFile.name.contains("Test", ignoreCase = true)) {
                         appendLog("[WARNING] Arquivo com nome 'Test' detectado. Operação cancelada para evitar autoanálise.")
                         return
                     }
-                    appendLog("[INFO] Iniciando análise da classe '${psiFile.name}' para geração de testes.")
+
+                    appendLog("🔄 Iniciando geração de testes para '${psiFile.name}' no pacote '${psiFile.packageName}'.")
                     targetClassName = psiFile.name
                     targetClassPackage = psiFile.packageName
                     targetClassCode = document.text
-                    enviarRequisicaoInit(project)
+                    // Execute init request off the UI thread to avoid blocking the EDT
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        enviarRequisicaoInit(project)
+                    }
                 } else {
                     appendLog("[INFO] O arquivo ativo não é um arquivo Java.")
                 }
@@ -291,8 +295,8 @@ class MyToolWindowFactory : ToolWindowFactory {
         }
 
         private fun enviarRequisicaoInit(project: Project) {
-            appendLog("[PROCESSING] Classe alvo: $targetClassName (pacote: $targetClassPackage)")
-            appendLog("[PROCESSING] Enviando requisição /init...")
+            appendLog("🔄 Preparando payload para /init...")
+            appendLog("⏳ Enviando requisição para http://localhost:8080/unitcat/api/init")
 
             try {
                 val payload = listOf(
@@ -302,37 +306,51 @@ class MyToolWindowFactory : ToolWindowFactory {
                 ).joinToString("&") { (k, v) ->
                     "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
                 }
+
                 val client = java.net.http.HttpClient.newHttpClient()
+
                 val request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create("http://localhost:8080/unitcat/api/init"))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(java.net.http.HttpRequest.BodyPublishers.ofString(payload))
                     .build()
-                val response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+
+                val response = executeWithWaitingLogs("PROCESSING") {
+                    client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                }
+
                 appendLog("[INFO] Código de status HTTP de /init: ${response.statusCode()}")
+
                 val objectMapper = jacksonObjectMapper()
                 val jsonTree = objectMapper.readTree(response.body())
-                // Parse analysisResponseDTO and customDependencies
+
                 val analysisNode = jsonTree.get("analysisResponseDTO")
                 val analysisMap: Map<String, Any>? =
                     if (analysisNode != null && !analysisNode.isNull) objectMapper.convertValue(analysisNode) else null
+
                 val customDepsNode = jsonTree.get("customDependencies")
+
                 val customDeps: List<String> = if (customDepsNode != null && customDepsNode.isArray) {
                     customDepsNode.mapNotNull { it.asText() }
                 } else {
                     emptyList()
                 }
-                appendLog("[INFO] Dependências vindas do /init (${customDeps.size}): ${customDeps.joinToString(", ")}")
+
+                appendLog("✅ Dependências identificadas (${customDeps.size}): ${customDeps.joinToString(", ")}")
+                appendLog("🔍 Recuperando código-fonte das dependências...")
+
                 dependenciasCodigo = buscarCodigoDasDependencias(project, customDeps)
-                appendLog("[INFO] Códigos das dependências localizadas.")
-                appendLog("[INFO] Conteúdo das dependências localizadas:\n$dependenciasCodigo")
+                appendLog("✅ Código-fonte das dependências carregado com ${customDeps.size} itens.")
+
                 guidelines = textArea.text
                 parsedResponse = ParsedInitResponse(
                     analysisResponseDTO = analysisMap,
                     customDependencies = customDeps
                 )
-                appendLog("[INFO] Enviando dados de guidelines com tamanho ${guidelines.length} caracteres.")
+
+                appendLog("📄 [INFO] Enviando dados de guidelines com tamanho de ${guidelines.length} caracteres.")
                 enviarRequisicaoComplete(project)
+
             } catch (e: Exception) {
                 appendLog("[ERROR] Erro ao enviar requisição /init: ${e.message}")
                 e.printStackTrace()
@@ -340,12 +358,10 @@ class MyToolWindowFactory : ToolWindowFactory {
         }
 
         private fun enviarRequisicaoComplete(project: Project) {
-            appendLog("[PROCESSING] Enviando requisição /complete...")
-            appendLog("[PROCESSING] Payload enviado:")
-            appendLog("targetClassName = $targetClassName")
-            appendLog("targetClassCode (truncado) = ${targetClassCode.take(100)}...")
-            appendLog("targetClassPackage = $targetClassPackage")
-            appendLog("guidelines = ${guidelines.take(100)}...")
+            appendLog("[PROCESSING] Preparando payload para /complete...")
+            appendLog("[PROCESSING] Enviando requisição para http://localhost:8080/unitcat/api/complete")
+            appendLog("📦 Payload resumido: targetClassName='$targetClassName', targetClassPackage='$targetClassPackage', guidelines='${guidelines.take(50)}...'")
+
             val dependenciesName = parsedResponse?.customDependencies?.joinToString(",") ?: ""
             appendLog("dependenciesName = $dependenciesName")
 
@@ -359,35 +375,37 @@ class MyToolWindowFactory : ToolWindowFactory {
             ).joinToString("&") { (k, v) ->
                 "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
             }
+
             appendLog("[INFO] Payload completo para /complete possui ${completeRequestBody.length} caracteres.")
             val client = java.net.http.HttpClient.newHttpClient()
+
             val completeRequest = java.net.http.HttpRequest.newBuilder()
                 .uri(java.net.URI.create("http://localhost:8080/unitcat/api/complete"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(completeRequestBody))
                 .build()
+
             try {
-                val completeResponse = client.send(
-                    completeRequest,
-                    java.net.http.HttpResponse.BodyHandlers.ofString()
-                )
-                appendLog("[INFO] Código de status HTTP de /complete: ${completeResponse.statusCode()}")
+                val completeResponse = executeWithWaitingLogs("PROCESSING") {
+                    client.send(
+                        completeRequest,
+                        java.net.http.HttpResponse.BodyHandlers.ofString()
+                    )
+                }
+
+                appendLog("✅ Resposta do /complete recebida com status ${completeResponse.statusCode()}")
+
                 val objectMapper = jacksonObjectMapper()
                 val completeResponseDTO = objectMapper.readValue(
                     completeResponse.body(),
                     CompleteResponseDTO::class.java
                 )
-                // Store FQN for retries
+
                 this@MyToolWindowFactory.latestGeneratedTestClassFqn = completeResponseDTO.generatedTestClassFqn
-                appendLog("[INFO] Resposta /complete recebida.")
-                appendLog("[INFO] Classe gerada: ${completeResponseDTO.generatedTestClassFqn}")
-                appendLog(
-                    "[INFO] Código gerado (preview):\n${
-                        completeResponseDTO.generatedTestCode.lines().take(10).joinToString("\n")
-                    }"
-                )
+                appendLog("🎉 Classe de teste gerada: ${completeResponseDTO.generatedTestClassFqn}")
 
                 criarClasseDeTeste(project, completeResponseDTO.generatedTestCode)
+
             } catch (e: Exception) {
                 e.printStackTrace()
                 appendLog("[ERROR] Erro ao enviar requisição /complete: ${e.message}")
@@ -396,38 +414,46 @@ class MyToolWindowFactory : ToolWindowFactory {
 
         private fun criarClasseDeTeste(project: Project, testClassContentRaw: String) {
             appendLog("[PROCESSING] Iniciando criação da classe de teste...")
+
             val testClassContent = testClassContentRaw
                 .removePrefix("```java")
                 .removeSuffix("```")
                 .trim()
+
             val packageLine = testClassContent.lines().firstOrNull { it.trim().startsWith("package ") }
             val packageName = packageLine?.removePrefix("package")?.removeSuffix(";")?.trim() ?: ""
             appendLog("[INFO] Pacote identificado: '$packageName'")
+
             val packagePath = packageName.replace('.', '/')
             val testRoot = File(project.basePath, "src/test/java/$packagePath")
             appendLog("[INFO] Diretório alvo: ${testRoot.absolutePath}")
+
             if (!testRoot.exists()) {
                 testRoot.mkdirs()
             }
+
             val classNameRegex = Regex("""class\s+(\w+)""")
             val match = classNameRegex.find(testClassContent)
             val className = match?.groups?.get(1)?.value ?: "GeneratedTest"
             appendLog("[INFO] Nome da classe de teste gerada: $className")
+
             testFile = File(testRoot, "$className.java")
-            appendLog("[INFO] Salvando classe de teste em: ${testFile.absolutePath}")
+            appendLog("📁 Criando arquivo de teste: ${testFile.absolutePath}")
+
             testFile.writeText(testClassContent)
-            appendLog("[INFO] Conteúdo da nova classe de teste possui ${testClassContent.length} caracteres.")
+            appendLog("✅ Arquivo de teste criado com ${testClassContent.length} caracteres.")
             appendLog("[INFO] Arquivo salvo com sucesso.")
 
             val newVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
                 .refreshAndFindFileByIoFile(testFile)
+
             if (newVirtualFile != null) {
                 appendLog("[INFO] Tentando abrir a classe de teste no editor: ${testFile.name}")
                 FileEditorManager.getInstance(project).openFile(newVirtualFile, true)
+
                 appendLog("[INFO] Classe de teste aberta com sucesso.")
-            } else {
-                appendLog("[ERROR] Falha ao localizar o arquivo virtual para: ${testFile.absolutePath}")
-            }
+            } else appendLog("[ERROR] Falha ao localizar o arquivo virtual para: ${testFile.absolutePath}")
+
 
             val fqn = if (packageName.isNotBlank()) "$packageName.$className" else className
             compileBeforeJUnit(project, fqn)
@@ -559,12 +585,14 @@ class MyToolWindowFactory : ToolWindowFactory {
                     }
 
                     val update = updatesMap[block.name]
+
                     if (update != null) {
                         newLines.addAll(update.modifiedCode.lines())
                         appendLog("[PROCESSING] Método '${block.name}' substituído com sucesso.")
                     } else {
                         newLines.addAll(block.originalCodeLines)
                     }
+
                     lastAddedLineIndex = block.endIndex
                 }
 
@@ -577,12 +605,16 @@ class MyToolWindowFactory : ToolWindowFactory {
 
             try {
                 val updates = objectMapper.readValue<UpdatePayload>(updatesJson)
+
                 val original = testFile.readText()
                 appendLog("[INFO] Tamanho do arquivo original para refatoração: ${original.length} caracteres.")
+
                 val updated = refactorTestClass(original, updates)
                 testFile.writeText(updated)
+
                 appendLog("[INFO] Tamanho do arquivo refatorado: ${updated.length} caracteres.")
                 appendLog("[INFO] Classe Java atualizada com sucesso com base no JSON do /retry.")
+
             } catch (e: Exception) {
                 appendLog("[ERROR] Erro ao processar JSON de atualização: ${e.message}")
                 e.printStackTrace()
@@ -595,12 +627,14 @@ class MyToolWindowFactory : ToolWindowFactory {
         val connection: MessageBusConnection = project.messageBus.connect(project as Disposable)
         connection.subscribe(SMTRunnerEventsListener.TEST_STATUS, object : SMTRunnerEventsListener {
             override fun onTestingStarted(p0: SMTestProxy.SMRootTestProxy) {}
+
             override fun onTestingFinished(root: SMTestProxy.SMRootTestProxy) {
                 if (errosDeTesteGlobal.isNotEmpty()) {
-                    myToolWindowInstance.appendLog("[INFO] Testes finalizados com falhas. Iniciando retry via API.")
+                    myToolWindowInstance.appendLog("⚠️ Testes falharam; iniciando retry para ajustar os métodos de teste.")
                     processRetry(project)
                 }
             }
+
             override fun onTestsCountInSuite(p0: Int) {}
             override fun onTestStarted(p0: SMTestProxy) {}
             override fun onTestIgnored(p0: SMTestProxy) {}
@@ -613,21 +647,25 @@ class MyToolWindowFactory : ToolWindowFactory {
             override fun onSuiteTreeNodeAdded(p0: SMTestProxy) {}
             override fun onSuiteTreeStarted(p0: SMTestProxy) {}
             override fun onTestFinished(testProxy: SMTestProxy) {}
+
             override fun onTestFailed(testProxy: SMTestProxy) {
-                myToolWindowInstance.appendLog("[INFO] Teste com falha encontrada.")
+                myToolWindowInstance.appendLog("❌ Teste falhou: '${testProxy.name}'. Capturando detalhes...")
 
                 val project = ProjectManager.getInstance().openProjects.firstOrNull() ?: return
+
                 ApplicationManager.getApplication().runReadAction {
                     val location = testProxy.getLocation(
                         project,
                         com.intellij.psi.search.GlobalSearchScope.projectScope(project)
                     )
+
                     val psiElement = location?.psiElement
                     val psiMethod = PsiTreeUtil.getContextOfType(
                         psiElement,
                         PsiMethod::class.java,
                         false
                     )
+
                     val nomeMetodoReal = psiMethod?.name ?: testProxy.name
                     val erro = mapOf(
                         "method_name" to nomeMetodoReal,
@@ -635,7 +673,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                         "stack_trace" to (testProxy.stacktrace ?: "")
                     )
 
-                    myToolWindowInstance.appendLog("[INFO] Detalhes do teste com falha: $erro")
+                    myToolWindowInstance.appendLog("🔎 Detalhes do erro no método '$nomeMetodoReal': ${testProxy.errorMessage}")
                     errosDeTesteGlobal.add(erro)
                 }
             }
@@ -643,8 +681,11 @@ class MyToolWindowFactory : ToolWindowFactory {
     }
 
     private fun processRetry(project: Project) {
+        myToolWindowInstance.appendLog("[INFO] Enviando detalhes dos testes falhos para ajustá-los via API")
+
         val objectMapper = jacksonObjectMapper()
         val failingTestsJson = objectMapper.writeValueAsString(errosDeTesteGlobal)
+
         val formParams = listOf(
             "targetClassName" to myToolWindowInstance.targetClassName,
             "targetClassPackage" to myToolWindowInstance.targetClassPackage,
@@ -656,27 +697,34 @@ class MyToolWindowFactory : ToolWindowFactory {
         ).joinToString("&") { (k, v) ->
             "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
         }
+
         try {
             val request = java.net.http.HttpRequest.newBuilder()
                 .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(formParams))
                 .build()
-            val response = java.net.http.HttpClient.newHttpClient()
-                .send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-            myToolWindowInstance.appendLog("[INFO] Resposta /retry: ${response.body()}")
-            // substituirMetodosNoArquivo call
+
+            val response = myToolWindowInstance.executeWithWaitingLogs("PROCESSING") {
+                java.net.http.HttpClient.newHttpClient()
+                    .send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+            }
+
+            myToolWindowInstance.appendLog("✅ Resposta do /retry recebida: ${response.body()}")
+
             try {
                 val testFile = myToolWindowInstance.testFile
                 myToolWindowInstance.substituirMetodosNoArquivo(testFile, response.body())
             } catch (e: Exception) {
                 myToolWindowInstance.appendLog("[ERROR] Falha ao substituir métodos no arquivo: ${e.message}")
             }
+
             errosDeTesteGlobal.clear()
-            // Schedule compilation on EDT
+
             ApplicationManager.getApplication().invokeLater {
                 compileBeforeJUnit(project, latestGeneratedTestClassFqn)
             }
+
         } catch (e: Exception) {
             e.printStackTrace()
             myToolWindowInstance.appendLog("[ERROR] Falha no retry: ${e.message}")
@@ -684,28 +732,34 @@ class MyToolWindowFactory : ToolWindowFactory {
     }
 
     private fun compileBeforeJUnit(project: Project, fqn: String) {
-        myToolWindowInstance.appendLog("[DEBUG] compileBeforeJUnit called with fqn='$fqn'")
+        myToolWindowInstance.appendLog("[INFO] compileBeforeJUnit invocado para fqn='$fqn'")
         val lastDot = fqn.lastIndexOf('.')
+
         val packageName = if (lastDot != -1) fqn.substring(0, lastDot) else ""
         val className = if (lastDot != -1) fqn.substring(lastDot + 1) else fqn
-        myToolWindowInstance.appendLog("[DEBUG] Iniciando compilação para $packageName.$className...")
+
+        myToolWindowInstance.appendLog("[INFO] Iniciando compilação para $packageName.$className...")
         val compileScope = CompilerManager.getInstance(project).createProjectCompileScope(project)
+
         ApplicationManager.getApplication().invokeLater {
+
             CompilerManager.getInstance(project).make(compileScope) { aborted, errorsCount, _, compileContext ->
                 if (aborted || errorsCount > 0) {
                     myToolWindowInstance.appendLog("[INFO] Erros de compilação detectados: $errorsCount. Coletando mensagens.")
+
                     compileContext.getMessages(CompilerMessageCategory.ERROR).forEach { msg ->
-                        myToolWindowInstance.appendLog("[DEBUG] Compilation error message received: ${msg.message}")
-                        myToolWindowInstance.appendLog("[DEBUG] VirtualFile path: ${msg.virtualFile.path}")
-                        // Determine method based on error line
+                        myToolWindowInstance.appendLog("[INFO] Messagem de Erro de Compilação recebida: ${msg.message}")
+                        myToolWindowInstance.appendLog("[INFO] VirtualFile path: ${msg.virtualFile.path}")
+
                         val vFile = msg.virtualFile
                         val document = FileDocumentManager.getInstance().getDocument(vFile)
-                        // Try to use msg.lineNumber, fallback to msg.line if necessary
+
                         val lineNum = try {
                             val ln = msg.javaClass.getMethod("getLineNumber").invoke(msg) as? Int
                             ln?.takeIf { it >= 1 } ?: (
                                 try { msg.javaClass.getMethod("getLine").invoke(msg) as? Int } catch (_: Exception) { null }
                             )?.takeIf { it >= 1 } ?: 1
+
                         } catch (_: Exception) {
                             try {
                                 val ln = msg.javaClass.getMethod("getLine").invoke(msg) as? Int
@@ -714,28 +768,34 @@ class MyToolWindowFactory : ToolWindowFactory {
                                 1
                             }
                         }
-                        myToolWindowInstance.appendLog("[DEBUG] Determined lineNum: $lineNum")
+
+                        myToolWindowInstance.appendLog("[INFO] Determinado número da linha: $lineNum")
                         val offset = document?.getLineStartOffset(lineNum - 1) ?: 0
-                        myToolWindowInstance.appendLog("[DEBUG] Calculated offset for error: $offset")
+
+                        myToolWindowInstance.appendLog("[INFO] Calculado offset para erro: $offset")
                         val psiFile = PsiManager.getInstance(project).findFile(vFile)
                         val psiElement = psiFile?.findElementAt(offset)
+
                         val psiMethod = PsiTreeUtil.getParentOfType(
                             psiElement, PsiMethod::class.java, false
                         )
-                        myToolWindowInstance.appendLog("[DEBUG] Resolved psiMethod: ${psiMethod?.name}")
+
+                        myToolWindowInstance.appendLog("[INFO] Resolved psiMethod: ${psiMethod?.name}")
                         val methodName = psiMethod?.name
                             ?: vFile.name.substringBeforeLast(".java")
+
                         val errorMap = mapOf(
                             "method_name" to methodName,
                             "error_message" to msg.message,
                             "stack_trace" to msg.message
                         )
-                        myToolWindowInstance.appendLog("[DEBUG] Adding errorMap: method_name=$methodName")
+
+                        myToolWindowInstance.appendLog("[INFO] Adicionando erroMap: method_name=$methodName")
                         errosDeTesteGlobal.add(errorMap)
                     }
                     processRetry(project)
                 } else {
-                    myToolWindowInstance.appendLog("[DEBUG] Compilação bem-sucedida para $packageName.$className. Executando JUnit Runner.")
+                    myToolWindowInstance.appendLog("[INFO] Compilação bem-sucedida para $packageName.$className. Executando JUnit Runner.")
                     reexecuteJUnitRunner(project, latestGeneratedTestClassFqn)
                 }
             }
@@ -743,15 +803,18 @@ class MyToolWindowFactory : ToolWindowFactory {
     }
 
     private fun reexecuteJUnitRunner(project: Project, generatedTestClassFqn: String) {
-        myToolWindowInstance.appendLog("[DEBUG] reexecuteJUnitRunner called with generatedTestClassFqn='$generatedTestClassFqn'")
-        // Parse fully-qualified name into package and class
+        myToolWindowInstance.appendLog("▶️ Executando testes JUnit para '$generatedTestClassFqn'...")
+
         val lastDot = generatedTestClassFqn.lastIndexOf('.')
         val packageName = if (lastDot != -1) generatedTestClassFqn.substring(0, lastDot) else ""
         val className = if (lastDot != -1) generatedTestClassFqn.substring(lastDot + 1) else generatedTestClassFqn
-        myToolWindowInstance.appendLog("[DEBUG] Parsed packageName='$packageName', className='$className'")
-        myToolWindowInstance.appendLog("[DEBUG] Scheduling execution on pooled thread for $packageName.$className")
+
+        myToolWindowInstance.appendLog("[INFO] Convertido packageName='$packageName', className='$className'")
+        myToolWindowInstance.appendLog("[INFO] Agendando execução na pooled thread para $packageName.$className")
+
         ApplicationManager.getApplication().executeOnPooledThread {
-            myToolWindowInstance.appendLog("[DEBUG] In pooled thread, resolving PsiClass for '$packageName.$className'")
+            myToolWindowInstance.appendLog("[INFO] Resolvendo PsiClass para '$packageName.$className' na pooled thread")
+
             val psiClass = ApplicationManager.getApplication().runReadAction<com.intellij.psi.PsiClass?> {
                 com.intellij.psi.JavaPsiFacade.getInstance(project)
                     .findClass(
@@ -762,7 +825,7 @@ class MyToolWindowFactory : ToolWindowFactory {
 
             if (psiClass != null) {
                 ApplicationManager.getApplication().invokeLater {
-                    myToolWindowInstance.appendLog("[DEBUG] PsiClass resolved: '${psiClass.name}'. Preparing JUnit run configuration.")
+                    myToolWindowInstance.appendLog("[INFO] PsiClass resolvido: '${psiClass.name}'. Preparando JUnit run configuration.")
                     val runManager = com.intellij.execution.RunManager.getInstance(project)
                     val configurationFactory = com.intellij.execution.junit.JUnitConfigurationType
                         .getInstance().configurationFactories[0]
@@ -779,10 +842,11 @@ class MyToolWindowFactory : ToolWindowFactory {
                         settings,
                         com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance()
                     )
-                    myToolWindowInstance.appendLog("[INFO] Classe de teste executada diretamente via JUnit runner.")
+
+                    myToolWindowInstance.appendLog("🎉 Testes executados com sucesso para '$generatedTestClassFqn'.")
                 }
             } else {
-                myToolWindowInstance.appendLog("[DEBUG][ERROR] PsiClass not found for '$packageName.$className'")
+                myToolWindowInstance.appendLog("[ERROR] Não foi possível localizar PsiClass para '$packageName.$className'.")
             }
         }
     }

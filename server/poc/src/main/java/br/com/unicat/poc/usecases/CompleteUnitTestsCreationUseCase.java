@@ -8,6 +8,7 @@ import br.com.unicat.poc.entities.GeneratedClass;
 import br.com.unicat.poc.prompts.GenerateUnitTestsPromptGenerator;
 import br.com.unicat.poc.usecases.interfaces.CompleteUnitTestsCreationInterface;
 import br.com.unicat.poc.usecases.utilities.JsonLlmResponseParser;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import lombok.RequiredArgsConstructor;
@@ -18,34 +19,41 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class CompleteUnitTestsCreationUseCase implements CompleteUnitTestsCreationInterface {
-    private final GenerateUnitTestsPromptGenerator generateUnitTestsPromptGenerator;
-    private final B3GPTGateway gateway;
+  private final GenerateUnitTestsPromptGenerator generateUnitTestsPromptGenerator;
+  private final B3GPTGateway gateway;
 
+  @Override
+  public CompleteResponseDTO execute(
+      CompleteRequestDTO requestDTO, AnalysedLogicResponseDTO analysedLogicResponseDTO)
+      throws Exception {
+    log.info(
+        "INIT CompleteUnitTestsCreationUseCase execute. request: {}, analysed logic: {}",
+        requestDTO,
+        analysedLogicResponseDTO);
 
-    @Override
-    public CompleteResponseDTO execute(CompleteRequestDTO requestDTO, AnalysedLogicResponseDTO analysedLogicResponseDTO) throws Exception {
-        log.info("INIT CompleteUnitTestsCreationUseCase execute. request: {}, analysed logic: {}", requestDTO, analysedLogicResponseDTO);
+    ObjectMapper mapper =
+        new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+    String testScenariosJson = mapper.writeValueAsString(analysedLogicResponseDTO.testScenarios());
 
-        ObjectMapper mapper = new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-        String testScenariosJson = mapper.writeValueAsString(analysedLogicResponseDTO.testScenarios());
-
-        final var prompt = this.generateUnitTestsPromptGenerator.get(
+    final var prompt =
+        this.generateUnitTestsPromptGenerator.get(
             requestDTO.dependenciesName(),
             requestDTO.dependencies(),
             testScenariosJson,
-            requestDTO.guidelines()
-        );
+            requestDTO.guidelines());
 
-        final var chatResponse = this.gateway.callAPI(prompt);
-        final var assistantMessage = chatResponse.getResult().getOutput();
+    final var chatResponse = this.gateway.callAPI(prompt);
+    final var assistantMessage = chatResponse.getResult().getOutput();
 
-        final var generatedClass = JsonLlmResponseParser.parseLlmResponse(assistantMessage, GeneratedClass.class);
-        assert generatedClass != null;
+    final var generatedClass =
+        JsonLlmResponseParser.parseLlmResponse(
+            assistantMessage, new TypeReference<GeneratedClass>() {});
+    assert generatedClass != null;
 
-        log.info("END CompleteUnitTestsCreationUseCase execute. generatedClass: {}", generatedClass);
-        return CompleteResponseDTO.builder()
-                .generatedTestClassFqn(generatedClass.getGeneratedTestClassFqn())
-                .generatedTestCode(generatedClass.getGeneratedTestCode())
-                .build();
-    }
+    log.info("END CompleteUnitTestsCreationUseCase execute. generatedClass: {}", generatedClass);
+    return CompleteResponseDTO.builder()
+        .generatedTestClassFqn(generatedClass.getGeneratedTestClassFqn())
+        .generatedTestCode(generatedClass.getGeneratedTestCode())
+        .build();
+  }
 }

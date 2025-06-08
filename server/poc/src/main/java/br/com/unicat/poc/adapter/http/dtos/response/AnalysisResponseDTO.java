@@ -6,9 +6,9 @@ import lombok.Data;
 @Data
 @Builder
 public class AnalysisResponseDTO {
-    private String classFqn;
-    private String purposeSummary;
-    private String mainMethodSignature;
-    private String inputType;
-    private String outputType;
+  private String classFqn;
+  private String purposeSummary;
+  private String mainMethodSignature;
+  private String inputType;
+  private String outputType;
 }

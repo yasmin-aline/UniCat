@@ -8,22 +8,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class GenerateUnitTestsPromptGenerator {
 
-    public Prompt get(
-            final String dependenciesList,
-            final String dependencies,
-            final String testScenarios,
-            final String guidelines
-    ) {
-        RequestContext context = RequestContextHolder.getContext();
-        final var targetClassName = context.getTargetClassPackage() + "." + context.getTargetClassName();
+  public Prompt get(
+      final String dependenciesList,
+      final String dependencies,
+      final String testScenarios,
+      final String guidelines) {
+    RequestContext context = RequestContextHolder.getContext();
+    final var targetClassName =
+        context.getTargetClassPackage() + "." + context.getTargetClassName();
 
-        final var prompt = String.format("""
+    final var prompt =
+        String.format(
+            """
                 # Prompt para Use Case: Gerar Código de Teste Unitário (Versão 2.1 - Suporte a Diretrizes)
-                
+
                 **Objetivo:** Gerar o código Java completo de uma classe de teste JUnit 5, implementando uma lista específica de cenários de teste, com base no código da classe alvo, suas dependências, e **seguindo diretrizes de escrita opcionais fornecidas pelo usuário**. A resposta deve ser um JSON contendo o FQN da classe de teste e o código gerado.
-                
+
                 **Instruções:**
-                
+
                 1.  **Entendimento:** Receba o código da classe alvo (`%s`), o código de suas dependências (`%s`), uma lista estruturada de cenários de teste (localizados na seção: **Cenários de Teste (JSON):**), e **diretrizes de escrita opcionais** (localizadas na seção: **Diretrizes de Escrita de Testes (Opcional):**).
                 2.  **Diretrizes de Escrita (Condicional):**
                     *   **Se `{{ DIRETRIZES_ESCRITA_TESTES }}` (localizadas na seção: **Diretrizes de Escrita de Testes (Opcional):**) for fornecido e não vazio:** Siga **ESTRITAMENTE** as convenções e padrões definidos nessas diretrizes ao gerar o código. Isso inclui, mas não se limita a: nomenclatura de métodos de teste, nomes de variáveis (e.g., para valores esperados e atuais), estrutura interna dos métodos (e.g., ordem de declaração, uso de linhas em branco), e quaisquer outros padrões de estilo mencionados.
@@ -37,18 +39,18 @@ public class GenerateUnitTestsPromptGenerator {
                     *   Inclua um método `@BeforeEach` para inicializar a classe alvo (`%s`) se for reutilizável entre os testes.
                     *   Garanta que todos os imports necessários estão presentes.
                 4.  **Formato JSON de Saída:** Retorne sua resposta EXCLUSIVAMENTE como um objeto JSON válido, contendo o FQN da classe de teste gerada e o código completo, conforme a estrutura abaixo.
-                
+
                 **Estrutura JSON de Saída Esperada:**
-                
+
                 ```json
                 {
                   '''generated_test_class_fqn''': '''<FQN completo da classe de teste gerada, e.g., com.example.MyClassTest>''',
                   '''generated_test_code''': '''<Código Java completo da classe de teste como uma string, incluindo package e imports>'''
                 }
                 ```
-                
+
                 **Exemplo Few-Shot (Genérico com Diretrizes):**
-                
+
                 *   **Input (Parâmetros Injetados):**
                     *   `{{ NOME_COMPLETO_CLASSE_ALVO }}`: `com.example.service.SimpleDiscountCalculator`
                     *   `{{ CODIGO_CLASSE_ALVO }}`: (Código da classe SimpleDiscountCalculator)
@@ -73,7 +75,7 @@ public class GenerateUnitTestsPromptGenerator {
                         3. Estrutura: Adicionar linha em branco entre Arrange, Act e Assert.
                         4. DisplayName: Usar a descrição do cenário diretamente.
                         ```
-                
+
                 *   **Output JSON Esperado (Refletindo as Diretrizes):**
                     ```json
                     {
@@ -81,48 +83,55 @@ public class GenerateUnitTestsPromptGenerator {
                       '''generated_test_code''': '''package com.example.service;\\n\\nimport com.example.dto.ProductDTO;\\nimport com.example.enums.DiscountType;\\nimport org.junit.jupiter.api.BeforeEach;\\nimport org.junit.jupiter.api.DisplayName;\\nimport org.junit.jupiter.api.Test;\\nimport java.math.BigDecimal;\\n\\nimport static org.junit.jupiter.api.Assertions.*;\\n\\nclass SimpleDiscountCalculatorTest {\\n\\n    private SimpleDiscountCalculator calculator;\\n\\n    @BeforeEach\\n    void setUp() {\\n        calculator = new SimpleDiscountCalculator();\\n    }\\n\\n    private ProductDTO createProduct(double price) {\\n        return new ProductDTO(BigDecimal.valueOf(price)); \\n    }\\n\\n    @Test\\n    @DisplayName(\\'Testar desconto percentual válido abaixo do cap (e.g., 10%%)\\')\\n    void deveAplicarDescontoPercentual_quandoValorValidoAbaixoCap() {\\n        // Arrange\\n        ProductDTO product = createProduct(100.00);\\n        BigDecimal esperado_Preco = BigDecimal.valueOf(90.00);\\n        \\n        // Act\\n        BigDecimal atual_Preco = calculator.calculateDiscountedPrice(product, DiscountType.PERCENTAGE, BigDecimal.valueOf(10));\\n        \\n        // Assert\\n        assertNotNull(atual_Preco);\\n        assertEquals(0, esperado_Preco.compareTo(atual_Preco));\\n    }\\n\\n    @Test\\n    @DisplayName(\\'Testar com produto nulo\\')\\n    void deveLancarExcecao_quandoProdutoNulo() {\\n        // Arrange\\n        // (Nenhum arrange específico necessário aqui)\\n        \\n        // Act & Assert\\n        assertThrows(IllegalArgumentException.class, () -> {\\n            calculator.calculateDiscountedPrice(null, DiscountType.PERCENTAGE, BigDecimal.TEN);\\n        });\\n    }\\n    // ... (Implementação dos outros métodos de teste seguindo as diretrizes) ...\\n}'''
                     }
                     ```
-                
+
                 **Sua Tarefa:**
-                
+
                 Agora, gere o código de teste JUnit 5 para a classe `%s` com base nos códigos, cenários e diretrizes (se fornecidas) abaixo, retornando a resposta no formato JSON especificado.
-                
+
                 **Código da Classe Alvo (`%s`):**
-                
+
                 ```java
                 {{ CODIGO_CLASSE_ALVO }}
                 %s
                 ```
-                
+
                 **Código das Dependências:**
-                
+
                 ```java
                 {{ CODIGO_DEPENDENCIAS }}
                 %s
                 ```
-                
+
                 **Cenários de Teste (JSON):**
-                
+
                 ```json
                 {{ CENARIOS_TESTE_JSON }}
                 %s
                 ```
-                
+
                 **Diretrizes de Escrita de Testes (Opcional):**
-                
+
                 ```text
                 {{ DIRETRIZES_ESCRITA_TESTES }}
                 %s
                 ```
-                
+
                 **Resposta JSON:**
-                
+
                 ```json
                 // Sua resposta JSON aqui
                 ```
-                """, targetClassName, dependenciesList, targetClassName, targetClassName, targetClassName, context.getTargetClassCode(), dependencies, testScenarios, guidelines);
+                """,
+            targetClassName,
+            dependenciesList,
+            targetClassName,
+            targetClassName,
+            targetClassName,
+            context.getTargetClassCode(),
+            dependencies,
+            testScenarios,
+            guidelines);
 
-
-
-        return new Prompt(prompt);
-    }
+    return new Prompt(prompt);
+  }
 }

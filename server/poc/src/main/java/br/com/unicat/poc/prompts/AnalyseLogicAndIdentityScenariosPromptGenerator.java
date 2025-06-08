@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 public class AnalyseLogicAndIdentityScenariosPromptGenerator {
 
   public Prompt get(final String dependencies, final String dependenciesName) {
-  	RequestContext context = RequestContextHolder.getContext();
+    RequestContext context = RequestContextHolder.getContext();
     final String targetClassName =
         context.getTargetClassPackage() + "." + context.getTargetClassName();
 

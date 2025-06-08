@@ -7,6 +7,7 @@ import br.com.unicat.poc.entities.AnalysedCode;
 import br.com.unicat.poc.prompts.AnalyseCodeAndIdentifyDependenciesPromptGenerator;
 import br.com.unicat.poc.usecases.interfaces.InitUnitTestsCreationInterface;
 import br.com.unicat.poc.usecases.utilities.JsonLlmResponseParser;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -29,7 +30,9 @@ public class InitUnitTestsCreationUseCase implements InitUnitTestsCreationInterf
     final ChatResponse chatResponse = this.gateway.callAPI(prompt);
     final AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
 
-    final AnalysedCode analysedCode = JsonLlmResponseParser.parseLlmResponse(assistantMessage, AnalysedCode.class);
+    final AnalysedCode analysedCode =
+        JsonLlmResponseParser.parseLlmResponse(
+            assistantMessage, new TypeReference<AnalysedCode>() {});
     assert analysedCode != null;
 
     return InitResponseDTO.builder()
@@ -40,8 +43,7 @@ public class InitUnitTestsCreationUseCase implements InitUnitTestsCreationInterf
                 .mainMethodSignature(analysedCode.getAnalysis().getMainMethodSignature())
                 .inputType(analysedCode.getAnalysis().getInputType())
                 .outputType(analysedCode.getAnalysis().getOutputType())
-                .build()
-        )
+                .build())
         .customDependencies(analysedCode.getCustomDependencies())
         .build();
   }

@@ -5,5 +5,7 @@ import br.com.unicat.poc.adapter.http.dtos.response.AnalysedLogicResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.CompleteResponseDTO;
 
 public interface CompleteUnitTestsCreationInterface {
-  CompleteResponseDTO execute(CompleteRequestDTO requestDTO, AnalysedLogicResponseDTO analysedLogicResponseDTO) throws Exception;
+  CompleteResponseDTO execute(
+      CompleteRequestDTO requestDTO, AnalysedLogicResponseDTO analysedLogicResponseDTO)
+      throws Exception;
 }

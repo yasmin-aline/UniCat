@@ -10,9 +10,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Analysis {
-    private String classFqn;
-    private String purposeSummary;
-    private String mainMethodSignature;
-    private String inputType;
-    private String outputType;
+  private String classFqn;
+  private String purposeSummary;
+  private String mainMethodSignature;
+  private String inputType;
+  private String outputType;
 }

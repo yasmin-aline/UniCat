@@ -79,6 +79,7 @@ class MyToolWindowFactory : ToolWindowFactory {
         var guidelines: String = ""
         var dependenciasCodigo: String = ""
         var parsedResponse: ParsedInitResponse? = null
+        val realDependenciesUsed: MutableSet<String> = mutableSetOf()
 
         fun appendLog(message: String) {
             println(message)
@@ -281,17 +282,51 @@ class MyToolWindowFactory : ToolWindowFactory {
             }
         }
 
-        private fun buscarCodigoDasDependencias(
-            project: Project,
-            fqns: List<String>
-        ): String {
+        private fun buscarCodigoDasDependencias(project: Project, fqns: List<String>): String {
             val facade = com.intellij.psi.JavaPsiFacade.getInstance(project)
             val scope = com.intellij.psi.search.GlobalSearchScope.allScope(project)
-            return fqns.joinToString("\n\n") { qualifiedName ->
-                val psiClass = facade.findClass(qualifiedName, scope)
-                psiClass?.containingFile?.text
-                    ?: "// Classe não encontrada no projeto: $qualifiedName"
+            val visitados = mutableSetOf<String>()
+            val codigoFonte = mutableListOf<String>()
+            realDependenciesUsed.clear()
+
+            fun processarClasse(fqn: String) {
+                if (fqn in visitados) {
+                    appendLog("🔁 Dependência já visitada: $fqn")
+                    return
+                }
+                appendLog("📦 Processando dependência: $fqn")
+                visitados.add(fqn)
+                realDependenciesUsed.add(fqn)
+
+                val psiClass = facade.findClass(fqn, scope)
+                val sourceCode = psiClass?.containingFile?.text
+                if (sourceCode == null) {
+                    appendLog("❌ Código não encontrado para: $fqn")
+                    codigoFonte.add("// Classe não encontrada no projeto: $fqn")
+                    return
+                }
+
+                appendLog("✅ Código encontrado para: $fqn")
+                codigoFonte.add(sourceCode)
+
+                val regexImport = Regex("""import\s+((com|br)\.[\w.]+);""")
+                val subDependencies = regexImport.findAll(sourceCode)
+                    .map { it.groupValues[1] }
+                    .filter { it.startsWith("com.deckofcards") && it !in visitados }
+                    .toList()
+
+                if (subDependencies.isNotEmpty()) {
+                    appendLog("🔍 Subdependências detectadas em $fqn: ${subDependencies.joinToString(", ")}")
+                }
+
+                subDependencies.forEach {
+                    appendLog("➡️ Processando subdependência: $it")
+                    processarClasse(it)
+                }
             }
+
+            fqns.forEach { processarClasse(it) }
+            return codigoFonte.joinToString("\n\n")
         }
 
         private fun enviarRequisicaoInit(project: Project) {
@@ -362,7 +397,7 @@ class MyToolWindowFactory : ToolWindowFactory {
             appendLog("[PROCESSING] Enviando requisição para http://localhost:8080/unitcat/api/complete")
             appendLog("📦 Payload resumido: targetClassName='$targetClassName', targetClassPackage='$targetClassPackage', guidelines='${guidelines.take(50)}...'")
 
-            val dependenciesName = parsedResponse?.customDependencies?.joinToString(",") ?: ""
+            val dependenciesName = realDependenciesUsed.joinToString(",")
             appendLog("dependenciesName = $dependenciesName")
 
             val completeRequestBody = listOf(

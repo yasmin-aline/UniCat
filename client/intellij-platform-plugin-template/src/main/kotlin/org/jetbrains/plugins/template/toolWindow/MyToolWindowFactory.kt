@@ -51,6 +51,9 @@ data class CompleteResponseDTO(
 
 class MyToolWindowFactory : ToolWindowFactory {
 
+    // Contador de tentativas de retry
+    private var retryCount: Int = 0
+
     private var latestGeneratedTestClassFqn: String = ""
 
     private lateinit var myToolWindowInstance: MyToolWindow
@@ -254,6 +257,7 @@ class MyToolWindowFactory : ToolWindowFactory {
         private fun onGerarTestesClicked() {
             val project = toolWindow.project
             val editor = FileEditorManager.getInstance(project).selectedTextEditor
+            retryCount = 0
 
             if (editor != null) {
                 val document = editor.document
@@ -667,6 +671,9 @@ class MyToolWindowFactory : ToolWindowFactory {
                 if (errosDeTesteGlobal.isNotEmpty()) {
                     myToolWindowInstance.appendLog("⚠️ Testes falharam; iniciando retry para ajustar os métodos de teste.")
                     processRetry(project)
+                } else {
+                    retryCount = 0;
+                    myToolWindowInstance.appendLog("[INFO] retryCount resetado para 0 após execução bem-sucedida.")
                 }
             }
 
@@ -716,6 +723,11 @@ class MyToolWindowFactory : ToolWindowFactory {
     }
 
     private fun processRetry(project: Project) {
+        if (retryCount >= 4) {
+            myToolWindowInstance.appendLog("🚫 Limite de tentativas de retry atingido (4). Processo encerrado.")
+            return
+        }
+
         myToolWindowInstance.appendLog("[INFO] Enviando detalhes dos testes falhos para ajustá-los via API")
 
         val objectMapper = jacksonObjectMapper()
@@ -727,7 +739,7 @@ class MyToolWindowFactory : ToolWindowFactory {
             "targetClassCode" to myToolWindowInstance.targetClassCode,
             "testClassCode" to myToolWindowInstance.testFile.readText(),
             "dependencies" to myToolWindowInstance.dependenciasCodigo,
-            "dependenciesName" to (myToolWindowInstance.parsedResponse?.customDependencies?.joinToString(",") ?: ""),
+            "dependenciesName" to myToolWindowInstance.realDependenciesUsed.joinToString(","),
             "failingTestDetailsRequestDTOS" to failingTestsJson
         ).joinToString("&") { (k, v) ->
             "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
@@ -755,6 +767,10 @@ class MyToolWindowFactory : ToolWindowFactory {
             }
 
             errosDeTesteGlobal.clear()
+
+            // Incrementa o contador de tentativas de retry
+            retryCount++
+            myToolWindowInstance.appendLog("[INFO] Retry #$retryCount concluído.")
 
             ApplicationManager.getApplication().invokeLater {
                 compileBeforeJUnit(project, latestGeneratedTestClassFqn)
@@ -878,7 +894,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                         com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance()
                     )
 
-                    myToolWindowInstance.appendLog("🎉 Testes executados com sucesso para '$generatedTestClassFqn'.")
+                    myToolWindowInstance.appendLog("🎉 Compilação realizada com sucesso para '$generatedTestClassFqn'.")
                 }
             } else {
                 myToolWindowInstance.appendLog("[ERROR] Não foi possível localizar PsiClass para '$packageName.$className'.")

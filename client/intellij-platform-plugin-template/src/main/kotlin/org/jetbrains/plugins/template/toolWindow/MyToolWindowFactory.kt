@@ -72,11 +72,14 @@ class MyToolWindowFactory : ToolWindowFactory {
     inner class MyToolWindow(private val toolWindow: ToolWindow) {
         // Serialização dos resultados dos testes
         var lastTestResultsSerialized: String = ""
+        // Logs area (unchanged)
         private val textArea = JTextArea(10, 30).apply {
             lineWrap = true
             wrapStyleWord = true
             border = BorderFactory.createEmptyBorder(10, 10, 10, 10)
         }
+        // Directives input area
+        private lateinit var guidelinesArea: JTextArea
 
         lateinit var testFile: File
         var targetClassName: String = ""
@@ -230,7 +233,7 @@ class MyToolWindowFactory : ToolWindowFactory {
 
             add(Box.createVerticalStrut(12))
 
-            val diretrizesArea = JTextArea(4, 30).apply {
+            guidelinesArea = JTextArea(4, 30).apply {
                 lineWrap = true
                 wrapStyleWord = true
                 border = BorderFactory.createLineBorder(JBColor.LIGHT_GRAY)
@@ -238,7 +241,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                 foreground = JBColor.BLACK
             }
 
-            val diretrizesScroll = JScrollPane(diretrizesArea).apply {
+            val diretrizesScroll = JScrollPane(guidelinesArea).apply {
                 horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
                 verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_NEVER
                 preferredSize = Dimension(Short.MAX_VALUE.toInt(), 100)
@@ -384,7 +387,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                 dependenciasCodigo = buscarCodigoDasDependencias(project, customDeps)
                 appendLog("✅ Código-fonte das dependências carregado com ${customDeps.size} itens.")
 
-                guidelines = textArea.text
+                guidelines = guidelinesArea.text
                 parsedResponse = ParsedInitResponse(
                     analysisResponseDTO = analysisMap,
                     customDependencies = customDeps

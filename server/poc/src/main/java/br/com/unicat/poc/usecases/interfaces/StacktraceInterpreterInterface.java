@@ -1,9 +1,8 @@
 package br.com.unicat.poc.usecases.interfaces;
 
-import br.com.unicat.poc.entities.StacktraceInterpreted;
-import java.util.List;
+import br.com.unicat.poc.adapter.http.dtos.request.RetryRequestDTO;
+import br.com.unicat.poc.entities.TestResults;
 
 public interface StacktraceInterpreterInterface {
-  List<StacktraceInterpreted> execute(
-      String dependenciesName, String dependenciesCode, String failedTestsDetails) throws Exception;
+  TestResults execute(final RetryRequestDTO requestDTO) throws Exception;
 }

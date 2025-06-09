@@ -61,14 +61,14 @@ public class UnitCatController {
       @ModelAttribute final RetryRequestDTO requestDTO, final RequestContext requestContext)
       throws Exception {
     log.info("INIT retry. requestDTO: {}", requestDTO);
-    final var stackTraceInterpreted = this.stacktraceInterpreterUseCase.execute(requestDTO.dependenciesName(), requestDTO.dependencies(), requestDTO.failingTestDetailsRequestDTOS());
+    final var testResults = this.stacktraceInterpreterUseCase.execute(requestDTO);
 
     final RefactoredUnitTestResponseDTO ans =
         this.refactorFailingUnitTestsCreation.execute(
             requestDTO.dependenciesName(),
             requestDTO.dependencies(),
             requestDTO.testClassCode(),
-            stackTraceInterpreted);
+                testResults);
 
     log.info("END retry. ans: {}", ans);
     return ResponseEntity.ok().body(ans);

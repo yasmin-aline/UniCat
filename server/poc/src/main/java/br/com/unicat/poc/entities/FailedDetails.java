@@ -2,7 +2,7 @@ package br.com.unicat.poc.entities;
 
 import java.util.List;
 
-public record StacktraceInterpreted(
+public record FailedDetails(
     String methodName,
     String errorSummary,
     String detailedAnalysis,

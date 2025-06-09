@@ -1,16 +1,22 @@
 package br.com.unicat.poc.usecases;
 
 import br.com.unicat.poc.adapter.gateway.B3GPTGateway;
-import br.com.unicat.poc.entities.StacktraceInterpreted;
+import br.com.unicat.poc.adapter.http.dtos.request.RetryRequestDTO;
+import br.com.unicat.poc.adapter.http.dtos.request.TestResultsRequestDTO;
+import br.com.unicat.poc.entities.CoverageReport;
+import br.com.unicat.poc.entities.FailedDetails;
+import br.com.unicat.poc.entities.TestResults;
 import br.com.unicat.poc.prompts.StacktraceInterpreterPromptGenerator;
 import br.com.unicat.poc.usecases.interfaces.StacktraceInterpreterInterface;
 import br.com.unicat.poc.usecases.utilities.JsonLlmResponseParser;
 import com.fasterxml.jackson.core.type.TypeReference;
-import java.util.List;
-import java.util.Objects;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -20,30 +26,40 @@ public class StacktraceInterpreterUseCase implements StacktraceInterpreterInterf
   private final B3GPTGateway b3gptGateway;
 
   @Override
-  public List<StacktraceInterpreted> execute(
-      String dependenciesName, String dependenciesCode, String failedTestsDetails)
+  public TestResults execute(final RetryRequestDTO requestDTO)
       throws Exception {
     log.info(
         "INIT StacktraceInterpreterUseCase execute. dependenciesName: {}, dep. code is null: {}, failedTestsDetails is null: {}",
-        dependenciesName,
-        Objects.isNull(dependenciesCode),
-        Objects.isNull(failedTestsDetails));
+            requestDTO.dependenciesName(),
+        Objects.isNull(requestDTO.dependencies()),
+        Objects.isNull(requestDTO.failingTestDetailsRequestDTOS()));
 
     final var prompt =
         this.stacktraceInterpreterPromptGenerator.get(
-            dependenciesName, dependenciesCode, failedTestsDetails);
+            requestDTO.dependenciesName(), requestDTO.dependencies(), requestDTO.failingTestDetailsRequestDTOS());
 
     final var chatResponse = this.b3gptGateway.callAPI(prompt);
     final var assistantMessage = chatResponse.getResult().getOutput();
 
-    final var stackTraceInterpreted =
+    final var failedDetails =
         JsonLlmResponseParser.parseLlmResponse(
-            assistantMessage, new TypeReference<List<StacktraceInterpreted>>() {});
-    assert stackTraceInterpreted != null;
+            assistantMessage, new TypeReference<List<FailedDetails>>() {});
+    assert failedDetails != null;
 
-    log.info(
-        "END StacktraceInterpreterUseCase execute. stackTraceInterpreted: {}",
-        stackTraceInterpreted);
-    return stackTraceInterpreted;
+    String rawText = Objects.requireNonNull(requestDTO.testResults()).trim();
+    final var testResultsDTO = new ObjectMapper().readValue(rawText, TestResultsRequestDTO.class);
+
+    String rawText2 = Objects.requireNonNull(requestDTO.coverageReport()).trim();
+    final var coverageReport = new ObjectMapper().readValue(rawText2, CoverageReport.class);
+
+    log.info("END StacktraceInterpreterUseCase execute. stackTraceInterpreted: {}", failedDetails);
+    return new TestResults(
+            testResultsDTO.totalTests(),
+            testResultsDTO.passedTests(),
+            testResultsDTO.failedTests(),
+            testResultsDTO.errorTests(),
+            failedDetails,
+            coverageReport
+    );
   }
 }

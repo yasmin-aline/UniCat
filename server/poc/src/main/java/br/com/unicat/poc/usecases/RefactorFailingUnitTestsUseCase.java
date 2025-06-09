@@ -4,7 +4,7 @@ import br.com.unicat.poc.adapter.gateway.B3GPTGateway;
 import br.com.unicat.poc.adapter.http.dtos.response.RefactoredTestCodeResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.RefactoredUnitTestResponseDTO;
 import br.com.unicat.poc.entities.RefactoredUnitTests;
-import br.com.unicat.poc.entities.StacktraceInterpreted;
+import br.com.unicat.poc.entities.TestResults;
 import br.com.unicat.poc.prompts.FixUnitTestsPromptGenerator;
 import br.com.unicat.poc.usecases.interfaces.RefactorFailingUnitTestsInterface;
 import br.com.unicat.poc.usecases.utilities.JsonLlmResponseParser;
@@ -14,8 +14,6 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Slf4j
 @Service
@@ -29,15 +27,15 @@ public class RefactorFailingUnitTestsUseCase implements RefactorFailingUnitTests
       final String dependenciesName,
       final String dependencies,
       final String testClassCode,
-      final List<StacktraceInterpreted> stacktraceInterpretedList)
+      final TestResults testResults)
       throws Exception {
     log.info(
         "INIT RefactorFailingUnitTestsUseCase execute. stacktraceInterpretedList: {}",
-            stacktraceInterpretedList);
+            testResults);
 
     ObjectMapper mapper =
         new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-    String stacktraceInterpretedListJSON = mapper.writeValueAsString(stacktraceInterpretedList);
+    String stacktraceInterpretedListJSON = mapper.writeValueAsString(testResults);
 
     final var prompt =
         this.fixUnitTestsPromptGenerator.get(dependencies, dependenciesName, testClassCode, stacktraceInterpretedListJSON, "");

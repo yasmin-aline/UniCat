@@ -30,7 +30,7 @@ public class FixUnitTestsPromptGenerator {
 				   **Instruções:**
 			
 				   1.  **Entendimento Completo:** Receba o código da classe alvo (`%s`), o código de suas dependências (`%s`), o código completo da classe de teste original (`{{ CODIGO_TESTE_ORIGINAL_COMPLETO }}`), uma lista detalhada dos testes que falharam (`{{ DETALHES_TESTES_FALHOS_JSON }}`), **informações de cobertura de linha da classe alvo** (`{{ COBERTURA_LINHA_JSON }}`), e o **número da tentativa atual** (`%s`). Você possui todas as informações necessárias para diagnosticar e corrigir os testes de forma autônoma e completa.
-					   *   **Otimização por Tentativa:** Você terá um máximo de 5 tentativas para ajustar o código. À medida que `{{ ATTEMPT_NUMBER }}` (%s) se aproxima de 5, maximize a assertividade e a busca por correção nas suas respostas. Na 5ª tentativa, se ainda houver testes falhando, adicione comentários detalhados conforme instruído no ponto 3.c.
+					   *   **Otimização por Tentativa:** Você terá um máximo de 5 tentativas para ajustar o código. À medida que `{{ ATTEMPT_NUMBER }}` (%s) se aproxima de 3, maximize a assertividade e a busca por correção nas suas respostas. Na 5ª tentativa, se ainda houver testes falhando, adicione comentários detalhados conforme instruído no ponto 3.c.
 			
 				   2.  **Análise Chain-of-Thought (CoT) por Teste Falho:** Para CADA teste listado em `{{ DETALHES_TESTES_FALHOS_JSON }}`, realize um raciocínio passo a passo INTERNO e DETALHADO para diagnosticar a falha. **Considere também as informações de cobertura de linha para entender se a falha está relacionada a um caminho de código não coberto ou mal testado.**
 					   *   **Localize o Teste:** Identifique o método de teste correspondente em `{{ CODIGO_TESTE_ORIGINAL_COMPLETO }}`.

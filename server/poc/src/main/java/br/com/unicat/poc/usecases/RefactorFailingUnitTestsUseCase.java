@@ -39,10 +39,14 @@ public class RefactorFailingUnitTestsUseCase implements RefactorFailingUnitTests
     String testResultsJSON = mapper.writeValueAsString(testResults);
     String coverageDetails = mapper.writeValueAsString(testResults.coverageReport());
 
-    int num = Integer.parseInt(attemptNumber) + 1;
+    final var num = Integer.parseInt(attemptNumber) + 1;
+    var str = String.valueOf(num);
+    if (num >= 3) {
+      str += "\nLimite de attemps atingido! Comente todos os testes que ainda estão falhando com a devida justificativa.";
+    }
 
     final var prompt =
-        this.fixUnitTestsPromptGenerator.get(dependencies, dependenciesName, testClassCode, testResultsJSON, coverageDetails, String.valueOf(num));
+        this.fixUnitTestsPromptGenerator.get(dependencies, dependenciesName, testClassCode, testResultsJSON, coverageDetails, str);
 
     final var chatResponse = this.b3gptGateway.callAPI(prompt);
     final var assistantMessage = chatResponse.getResult().getOutput();

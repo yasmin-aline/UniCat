@@ -114,7 +114,7 @@ class MyToolWindowFactory : ToolWindowFactory {
         ): T {
             val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
             val future: ScheduledFuture<*> = scheduler.scheduleAtFixedRate(
-                { appendLog("⏳[$tag] Aguardando resposta da API…") },
+                { appendLog("⏳[$tag] Aguardando LLM raciocinar…") },
                 5, 5, TimeUnit.SECONDS
             )
             return try {
@@ -669,6 +669,7 @@ class MyToolWindowFactory : ToolWindowFactory {
     private var totalTests = 0
     private var passedTests = 0
     private var errorTests = 0
+    private lateinit var coverageReport: Map<String, Any>
 
     private fun registrarListenerDeTeste(project: Project) {
         val connection: MessageBusConnection = project.messageBus.connect(project as Disposable)
@@ -681,12 +682,16 @@ class MyToolWindowFactory : ToolWindowFactory {
             }
 
             override fun onTestingFinished(root: SMTestProxy.SMRootTestProxy) {
+                coverageReport = capturarCoverage(project)
+                myToolWindowInstance.appendLog("[INFO] Coverage Report capturado: $coverageReport")
+
                 val testResults = mapOf(
                     "totalTests" to totalTests,
                     "passedTests" to passedTests,
                     "failedTests" to errosDeTesteGlobal.size,
                     "errorTests" to errorTests
                 )
+
                 val objectMapper = jacksonObjectMapper()
                 val serializedTestResults = objectMapper.writeValueAsString(testResults)
                 myToolWindowInstance.appendLog("[INFO] test_results = $serializedTestResults")
@@ -760,18 +765,14 @@ class MyToolWindowFactory : ToolWindowFactory {
     }
 
     private fun processRetry(project: Project) {
-        if (retryCount >= 5) {
-            myToolWindowInstance.appendLog("🚫 Limite de tentativas de retry atingido (4). Processo encerrado.")
+        if (retryCount >= 3) {
+            myToolWindowInstance.appendLog("🚫 Limite de tentativas de retry atingido (3). Processo encerrado.")
             return
         }
 
         myToolWindowInstance.appendLog("[INFO] Iniciando processo de retry em background...")
         // Run coverage capture, HTTP request and file updates on a pooled thread
         ApplicationManager.getApplication().executeOnPooledThread {
-            // Capture coverage data
-            val coverageReport = capturarCoverage(project)
-
-            // Build form parameters
             val formParams = listOf(
                 "targetClassName" to myToolWindowInstance.targetClassName,
                 "targetClassPackage" to myToolWindowInstance.targetClassPackage,
@@ -796,11 +797,13 @@ class MyToolWindowFactory : ToolWindowFactory {
 
             try {
                 // Send HTTP request off the UI thread
-                val response = java.net.http.HttpClient.newHttpClient()
-                    .send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                val response = myToolWindowInstance.executeWithWaitingLogs("PROCESSING") {
+                    java.net.http.HttpClient.newHttpClient()
+                        .send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                }
 
                 // Update UI and write file on the UI thread
-                ApplicationManager.getApplication().invokeLater {
+                ApplicationManager.getApplication().runWriteAction {
                     myToolWindowInstance.appendLog("✅ Resposta do /retry recebida: ${response.body()}")
                     try {
                         val testFile = myToolWindowInstance.testFile
@@ -893,7 +896,6 @@ class MyToolWindowFactory : ToolWindowFactory {
         val compileScope = CompilerManager.getInstance(project).createProjectCompileScope(project)
 
         ApplicationManager.getApplication().invokeLater {
-
             CompilerManager.getInstance(project).make(compileScope) { aborted, errorsCount, _, compileContext ->
                 if (aborted || errorsCount > 0) {
                     myToolWindowInstance.appendLog("[INFO] Erros de compilação detectados: $errorsCount. Coletando mensagens.")

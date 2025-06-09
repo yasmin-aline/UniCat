@@ -48,7 +48,8 @@ public class StacktraceInterpreterPromptGenerator {
                         *   Se a causa raiz for um bug na classe alvo, o plano deve indicar que a classe alvo precisa ser corrigida, mas o foco principal da `solution_steps` deve ser como o teste *deveria* ser escrito para validar o comportamento *correto* (assumindo que a classe alvo será corrigida).
 
                 3.  **Formato JSON de Saída:** Retorne sua resposta EXCLUSIVAMENTE como um objeto JSON válido, contendo uma lista de objetos, onde cada objeto representa um teste falho analisado, com as informações detalhadas da análise e do plano de solução.
-
+                    *   **Nunca acrescente qualquer outra informação no corpo de resposta além da estrutura JSON de saída esperada informada abaixo! O sistema que recebe a sua resposta espera somente um objeto JSON e se você adicionar qualquer texto antes ou depois, irá quebrar a aplicação e gerar um bug. Não faça isso. Retorne exatamente o que lhe foi pedido.**
+                
                 **Estrutura JSON de Saída Esperada:**
 
                 ```json

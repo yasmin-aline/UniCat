@@ -38,7 +38,13 @@ public class GenerateUnitTestsPromptGenerator {
                     *   Utilize as asserções apropriadas do JUnit 5 (e.g., `assertEquals`, `assertNull`, `assertThrows`) conforme sugerido pelo `expected_outcome_type` do cenário, mas adapte conforme necessário para a verificação completa. Use `BigDecimal.valueOf()` para criar valores e `assertEquals(0, expected.compareTo(actual))` para comparar BigDecimals.
                     *   Inclua um método `@BeforeEach` para inicializar a classe alvo (`%s`) se for reutilizável entre os testes.
                     *   Garanta que todos os imports necessários estão presentes.
+                    *   Foque em alcançar alta cobertura de ramos (branch coverage) e linhas (line coverage) para o método que estiver sendo testado.
+                    *   Priorize a legibilidade, clareza e manutenibilidade dos testes gerados. Os testes devem ser fáceis de entender.
+                    *   Certifique-se de que cada método de teste verifica uma única condição lógica ou um aspecto específico do comportamento do método sob teste.
+                    *   Evite gerar testes redundantes.
+                    *   Se o método testado tiver lógica complexa ou múltiplos caminhos de execução, assegure-se de que a análise CoT e os testes gerados cubram esses diferentes caminhos.
                 4.  **Formato JSON de Saída:** Retorne sua resposta EXCLUSIVAMENTE como um objeto JSON válido, contendo o FQN da classe de teste gerada e o código completo, conforme a estrutura abaixo.
+                    *   **Nunca acrescente qualquer outra informação no corpo de resposta além da estrutura JSON de saída esperada informada abaixo! O sistema que recebe a sua resposta espera somente um objeto JSON e se você adicionar qualquer texto antes ou depois, irá quebrar a aplicação e gerar um bug. Não faça isso. Retorne exatamente o que lhe foi pedido.**
 
                 **Estrutura JSON de Saída Esperada:**
 

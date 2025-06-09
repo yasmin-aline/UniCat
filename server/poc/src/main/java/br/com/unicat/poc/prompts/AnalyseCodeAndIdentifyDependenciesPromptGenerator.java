@@ -26,6 +26,7 @@ public class AnalyseCodeAndIdentifyDependenciesPromptGenerator {
               3.  Determine os tipos de dados de entrada e saída desse método principal.
               4.  Liste os nomes totalmente qualificados (FQNs) de TODAS as classes/enums customizadas (não pertencentes ao JDK ou frameworks comuns como Spring - ignore anotações) que são diretamente referenciadas no código.
               5.  Formate sua resposta EXCLUSIVAMENTE como um objeto JSON válido, seguindo a estrutura definida no exemplo abaixo.
+                  *   Nunca acrescente qualquer outra informação no corpo de resposta além da estrutura JSON de saída esperada informada abaixo! O sistema que recebe a sua resposta espera somente um objeto JSON e se você adicionar qualquer texto antes ou depois, irá quebrar a aplicação e gerar um bug. Não faça isso. Retorne exatamente o que lhe foi pedido.
 
               **Estrutura JSON de Saída Esperada:**
 

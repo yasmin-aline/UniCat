@@ -31,7 +31,8 @@ public class AnalyseLogicAndIdentityScenariosPromptGenerator {
 				    *   **Robustez:** Avalie criticamente se a lógica é robusta contra os casos de borda e erros identificados.
 				2.  **Geração de Cenários:** Com base na sua análise CoT, derive uma lista COMPLETA de cenários de teste descritivos que cubram todos os fluxos, casos de borda e tratamentos de erro relevantes. Para cada cenário, indique brevemente o tipo de verificação principal (e.g., igualdade, nulidade, exceção).
 				3.  **Formato JSON:** Estruture sua resposta FINAL exclusivamente como um objeto JSON válido, conforme o esquema abaixo. Inclua um resumo da sua análise CoT e a lista de cenários.
-
+					*   **Nunca acrescente qualquer outra informação no corpo de resposta além da estrutura JSON de saída esperada informada abaixo! O sistema que recebe a sua resposta espera somente um objeto JSON e se você adicionar qualquer texto antes ou depois, irá quebrar a aplicação e gerar um bug. Não faça isso. Retorne exatamente o que lhe foi pedido.**
+				
 				**Estrutura JSON de Saída Esperada:**
 
 				```json

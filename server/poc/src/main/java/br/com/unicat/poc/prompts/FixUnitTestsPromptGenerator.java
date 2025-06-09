@@ -73,7 +73,8 @@ public class FixUnitTestsPromptGenerator {
 				   4.  **Identificar Novos Imports:** Verifique se as suas correções introduziram a necessidade de novas classes/imports que não estavam presentes no `{{ CODIGO_TESTE_ORIGINAL_COMPLETO }}`.
 			
 				   5.  **Formato JSON de Saída:** Retorne sua resposta EXCLUSIVAMENTE como um objeto JSON válido, contendo uma lista dos métodos modificados (corrigidos ou comentados) e uma lista dos novos imports necessários, conforme a estrutura abaixo.
-			
+						*   **Nunca acrescente qualquer outra informação no corpo de resposta além da estrutura JSON de saída esperada informada abaixo! O sistema que recebe a sua resposta espera somente um objeto JSON e se você adicionar qualquer texto antes ou depois, irá quebrar a aplicação e gerar um bug. Não faça isso. Retorne exatamente o que lhe foi pedido.**
+				
 				   **Estrutura JSON de Saída Esperada:**
 			
 				   ```json

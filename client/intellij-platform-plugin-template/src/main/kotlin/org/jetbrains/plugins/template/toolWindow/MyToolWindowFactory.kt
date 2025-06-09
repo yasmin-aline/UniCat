@@ -969,7 +969,8 @@ class MyToolWindowFactory : ToolWindowFactory {
                     "dependenciesName" to myToolWindowInstance.realDependenciesUsed.joinToString(","),
                     "failingTestDetailsRequestDTOS" to jacksonObjectMapper().writeValueAsString(errosDeTesteGlobal),
                     "testResults" to myToolWindowInstance.lastTestResultsSerialized,
-                    "coverageReport" to jacksonObjectMapper().writeValueAsString(coverageReport)
+                    "coverageReport" to jacksonObjectMapper().writeValueAsString(coverageReport),
+                    "attemptNumber" to retryCount.toString()
                 ).joinToString("&") { (k, v) ->
                     "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
                 }

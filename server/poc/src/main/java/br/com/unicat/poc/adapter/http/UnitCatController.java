@@ -68,7 +68,8 @@ public class UnitCatController {
             requestDTO.dependenciesName(),
             requestDTO.dependencies(),
             requestDTO.testClassCode(),
-                testResults);
+            testResults,
+            requestDTO.attemptNumber());
 
     log.info("END retry. ans: {}", ans);
     return ResponseEntity.ok().body(ans);

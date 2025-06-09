@@ -8,6 +8,7 @@ public interface RefactorFailingUnitTestsInterface {
       final String dependenciesName,
       final String dependencies,
       final String testClassCode,
-      final TestResults testResults)
+      final TestResults testResults,
+      final String attemptNumber)
       throws Exception;
 }

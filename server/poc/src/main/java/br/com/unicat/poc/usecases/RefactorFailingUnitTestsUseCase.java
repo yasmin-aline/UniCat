@@ -27,7 +27,8 @@ public class RefactorFailingUnitTestsUseCase implements RefactorFailingUnitTests
       final String dependenciesName,
       final String dependencies,
       final String testClassCode,
-      final TestResults testResults)
+      final TestResults testResults,
+      final String attemptNumber)
       throws Exception {
     log.info(
         "INIT RefactorFailingUnitTestsUseCase execute. stacktraceInterpretedList: {}",
@@ -35,10 +36,13 @@ public class RefactorFailingUnitTestsUseCase implements RefactorFailingUnitTests
 
     ObjectMapper mapper =
         new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-    String stacktraceInterpretedListJSON = mapper.writeValueAsString(testResults);
+    String testResultsJSON = mapper.writeValueAsString(testResults);
+    String coverageDetails = mapper.writeValueAsString(testResults.coverageReport());
+
+    int num = Integer.parseInt(attemptNumber) + 1;
 
     final var prompt =
-        this.fixUnitTestsPromptGenerator.get(dependencies, dependenciesName, testClassCode, stacktraceInterpretedListJSON, "");
+        this.fixUnitTestsPromptGenerator.get(dependencies, dependenciesName, testClassCode, testResultsJSON, coverageDetails, String.valueOf(num));
 
     final var chatResponse = this.b3gptGateway.callAPI(prompt);
     final var assistantMessage = chatResponse.getResult().getOutput();

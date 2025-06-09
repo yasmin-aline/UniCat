@@ -9,7 +9,6 @@ import com.intellij.execution.testframework.sm.runner.SMTRunnerEventsListener
 import com.intellij.execution.testframework.sm.runner.SMTestProxy
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.compiler.CompilerManager
 import com.intellij.openapi.compiler.CompilerMessageCategory
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -675,11 +674,13 @@ class MyToolWindowFactory : ToolWindowFactory {
         val connection: MessageBusConnection = project.messageBus.connect(project as Disposable)
         connection.subscribe(SMTRunnerEventsListener.TEST_STATUS, object : SMTRunnerEventsListener {
             override fun onTestingStarted(p0: SMTestProxy.SMRootTestProxy) {
-                // Opcional: resetar os contadores aqui se necessário
+                totalTests = 0
+                passedTests = 0
+                errosDeTesteGlobal.clear()
+                errorTests = 0
             }
 
             override fun onTestingFinished(root: SMTestProxy.SMRootTestProxy) {
-                // Gera objeto de resultados dos testes e serializa para JSON
                 val testResults = mapOf(
                     "totalTests" to totalTests,
                     "passedTests" to passedTests,
@@ -759,14 +760,74 @@ class MyToolWindowFactory : ToolWindowFactory {
     }
 
     private fun processRetry(project: Project) {
-        if (retryCount >= 4) {
+        if (retryCount >= 5) {
             myToolWindowInstance.appendLog("🚫 Limite de tentativas de retry atingido (4). Processo encerrado.")
             return
         }
 
-        myToolWindowInstance.appendLog("[INFO] Enviando detalhes dos testes falhos para ajustá-los via API")
+        myToolWindowInstance.appendLog("[INFO] Iniciando processo de retry em background...")
+        // Run coverage capture, HTTP request and file updates on a pooled thread
+        ApplicationManager.getApplication().executeOnPooledThread {
+            // Capture coverage data
+            val coverageReport = capturarCoverage(project)
 
-        executarCoverageDepoisDosTestes(project)
+            // Build form parameters
+            val formParams = listOf(
+                "targetClassName" to myToolWindowInstance.targetClassName,
+                "targetClassPackage" to myToolWindowInstance.targetClassPackage,
+                "targetClassCode" to myToolWindowInstance.targetClassCode,
+                "testClassCode" to myToolWindowInstance.testFile.readText(),
+                "dependencies" to myToolWindowInstance.dependenciasCodigo,
+                "dependenciesName" to myToolWindowInstance.realDependenciesUsed.joinToString(","),
+                "failingTestDetailsRequestDTOS" to jacksonObjectMapper().writeValueAsString(errosDeTesteGlobal),
+                "testResults" to myToolWindowInstance.lastTestResultsSerialized,
+                "coverageReport" to jacksonObjectMapper().writeValueAsString(coverageReport),
+                "attemptNumber" to retryCount.toString()
+            ).joinToString("&") { (k, v) ->
+                "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+            }
+
+            myToolWindowInstance.appendLog("[INFO] Enviando detalhes dos testes falhos para ajustá-los via API")
+            val request = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(formParams))
+                .build()
+
+            try {
+                // Send HTTP request off the UI thread
+                val response = java.net.http.HttpClient.newHttpClient()
+                    .send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+
+                // Update UI and write file on the UI thread
+                ApplicationManager.getApplication().invokeLater {
+                    myToolWindowInstance.appendLog("✅ Resposta do /retry recebida: ${response.body()}")
+                    try {
+                        val testFile = myToolWindowInstance.testFile
+                        myToolWindowInstance.substituirMetodosNoArquivo(testFile, response.body())
+                    } catch (e: Exception) {
+                        myToolWindowInstance.appendLog("[ERROR] Falha ao substituir métodos no arquivo: ${e.message}")
+                    }
+                    // Clear state and increment retry count
+                    errosDeTesteGlobal.clear()
+                    totalTests = 0
+                    passedTests = 0
+                    errorTests = 0
+
+                    retryCount++
+
+                    myToolWindowInstance.appendLog("[INFO] Retry #$retryCount concluído.")
+                }
+
+                // Continue with compilation and re-run tests in background
+                compileBeforeJUnit(project, latestGeneratedTestClassFqn)
+
+            } catch (e: Exception) {
+                ApplicationManager.getApplication().invokeLater {
+                    myToolWindowInstance.appendLog("[ERROR] Erro durante retry: ${e.message}")
+                }
+            }
+        }
     }
 
     private fun capturarCoverage(project: Project): Map<String, Any> {
@@ -813,11 +874,11 @@ class MyToolWindowFactory : ToolWindowFactory {
         myToolWindowInstance.appendLog("[INFO] capturarCoverage: FQN=$fqn, totalLines=$totalLines, coveredLines=$coveredLines, percentage=$percentage")
 
         return mapOf(
-            "class_fqn" to fqn,
-            "lines_total" to totalLines,
-            "lines_covered" to coveredLines,
-            "lines_missed" to linesMissed,
-            "coverage_percentage" to percentage
+            "classFqn" to fqn,
+            "linesTotal" to totalLines,
+            "linesCovered" to coveredLines,
+            "linesMissed" to linesMissed,
+            "coveragePercentage" to percentage
         )
     }
 
@@ -883,17 +944,22 @@ class MyToolWindowFactory : ToolWindowFactory {
                         myToolWindowInstance.appendLog("[INFO] Adicionando erroMap: method_name=$methodName")
                         errosDeTesteGlobal.add(errorMap)
                     }
+
                     processRetry(project)
                 } else {
                     myToolWindowInstance.appendLog("[INFO] Compilação bem-sucedida para $packageName.$className. Executando JUnit Runner.")
-                    reexecuteJUnitRunner(project, latestGeneratedTestClassFqn)
+                    executeJUnitRunner(project, latestGeneratedTestClassFqn)
                 }
             }
         }
     }
 
-    private fun reexecuteJUnitRunner(project: Project, generatedTestClassFqn: String) {
+    private fun executeJUnitRunner(project: Project, generatedTestClassFqn: String) {
         myToolWindowInstance.appendLog("▶️ Executando testes JUnit para '$generatedTestClassFqn'...")
+
+        // Compute fully qualified name of the class under test (remove .java suffix if present)
+        val classUnderTestName = myToolWindowInstance.targetClassName.removeSuffix(".java")
+        val classUnderTestFqn = "${myToolWindowInstance.targetClassPackage}.$classUnderTestName"
 
         val lastDot = generatedTestClassFqn.lastIndexOf('.')
         val packageName = if (lastDot != -1) generatedTestClassFqn.substring(0, lastDot) else ""
@@ -921,13 +987,14 @@ class MyToolWindowFactory : ToolWindowFactory {
                     val configurationFactory = com.intellij.execution.junit.JUnitConfigurationType
                         .getInstance().configurationFactories[0]
 
-                    val settings = runManager.createConfiguration(className, configurationFactory)
+                    val settings = runManager.createConfiguration("$className [UniCat]", configurationFactory)
                     val configuration = settings.configuration as com.intellij.execution.junit.JUnitConfiguration
 
                     val rawCoverageConfig = JavaCoverageEnabledConfiguration.getFrom(configuration)
                     if (rawCoverageConfig != null) {
-                        val fqnClasseTestada = myToolWindowInstance.targetClassPackage + "." + myToolWindowInstance.targetClassName
-                        rawCoverageConfig.coveragePatterns = arrayOf(com.intellij.ui.classFilter.ClassFilter(fqnClasseTestada))
+                        rawCoverageConfig.coveragePatterns = arrayOf(
+                            com.intellij.ui.classFilter.ClassFilter(classUnderTestFqn)
+                        )
                     } else {
                         myToolWindowInstance.appendLog("[WARNING] Não foi possível configurar o padrão de cobertura. A configuração não é do tipo JavaCoverageEnabledConfiguration.")
                     }
@@ -951,60 +1018,6 @@ class MyToolWindowFactory : ToolWindowFactory {
                 myToolWindowInstance.appendLog("[ERROR] Não foi possível localizar PsiClass para '$packageName.$className'.")
             }
         }
-    }
-
-    /**
-     * Executa a captura de coverage e realiza o envio para o endpoint /retry após os testes.
-     */
-    private fun executarCoverageDepoisDosTestes(project: Project) {
-        ApplicationManager.getApplication().invokeLater({
-            ApplicationManager.getApplication().invokeAndWait({
-                val coverageReport = capturarCoverage(project)
-                val formParams = listOf(
-                    "targetClassName" to myToolWindowInstance.targetClassName,
-                    "targetClassPackage" to myToolWindowInstance.targetClassPackage,
-                    "targetClassCode" to myToolWindowInstance.targetClassCode,
-                    "testClassCode" to myToolWindowInstance.testFile.readText(),
-                    "dependencies" to myToolWindowInstance.dependenciasCodigo,
-                    "dependenciesName" to myToolWindowInstance.realDependenciesUsed.joinToString(","),
-                    "failingTestDetailsRequestDTOS" to jacksonObjectMapper().writeValueAsString(errosDeTesteGlobal),
-                    "testResults" to myToolWindowInstance.lastTestResultsSerialized,
-                    "coverageReport" to jacksonObjectMapper().writeValueAsString(coverageReport),
-                    "attemptNumber" to retryCount.toString()
-                ).joinToString("&") { (k, v) ->
-                    "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
-                }
-
-                val request = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(formParams))
-                    .build()
-
-                val response = myToolWindowInstance.executeWithWaitingLogs("PROCESSING") {
-                    java.net.http.HttpClient.newHttpClient()
-                        .send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-                }
-
-                myToolWindowInstance.appendLog("✅ Resposta do /retry recebida: ${response.body()}")
-
-                try {
-                    val testFile = myToolWindowInstance.testFile
-                    myToolWindowInstance.substituirMetodosNoArquivo(testFile, response.body())
-                } catch (e: Exception) {
-                    myToolWindowInstance.appendLog("[ERROR] Falha ao substituir métodos no arquivo: ${e.message}")
-                }
-
-                errosDeTesteGlobal.clear()
-                totalTests = 0
-                passedTests = 0
-                errorTests = 0
-                retryCount++
-
-                myToolWindowInstance.appendLog("[INFO] Retry #$retryCount concluído.")
-                compileBeforeJUnit(project, latestGeneratedTestClassFqn)
-            }, ModalityState.nonModal())
-        })
     }
 
     companion object {

@@ -47,12 +47,17 @@ public class StacktraceInterpreterUseCase implements StacktraceInterpreterInterf
     assert failedDetails != null;
 
     String rawText = Objects.requireNonNull(requestDTO.testResults()).trim();
-    final var testResultsDTO = new ObjectMapper().readValue(rawText, TestResultsRequestDTO.class);
+    final var testResultsDTO = rawText.isEmpty() ? null : new ObjectMapper().readValue(rawText, TestResultsRequestDTO.class);
 
     String rawText2 = Objects.requireNonNull(requestDTO.coverageReport()).trim();
-    final var coverageReport = new ObjectMapper().readValue(rawText2, CoverageReport.class);
+    final var coverageReport = rawText2.isEmpty() ? null : new ObjectMapper().readValue(rawText2, CoverageReport.class);
 
     log.info("END StacktraceInterpreterUseCase execute. stackTraceInterpreted: {}", failedDetails);
+
+    if (testResultsDTO == null) {
+      return new TestResults("", "", "", "", failedDetails, coverageReport);
+    }
+
     return new TestResults(
             testResultsDTO.totalTests(),
             testResultsDTO.passedTests(),

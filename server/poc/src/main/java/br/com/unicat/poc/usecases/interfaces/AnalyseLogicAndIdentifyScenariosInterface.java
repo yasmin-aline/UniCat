@@ -1,8 +1,8 @@
 package br.com.unicat.poc.usecases.interfaces;
 
-import br.com.unicat.poc.adapter.http.dtos.response.AnalysedLogicResponseDTO;
+import br.com.unicat.poc.entities.AnalysedLogic;
 
 public interface AnalyseLogicAndIdentifyScenariosInterface {
-  AnalysedLogicResponseDTO execute(final String dependenciesName, final String dependencies)
+  AnalysedLogic execute(final String dependenciesName, final String dependencies)
       throws Exception;
 }

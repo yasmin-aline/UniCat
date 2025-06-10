@@ -2,8 +2,8 @@ package br.com.unicat.poc.usecases;
 
 import br.com.unicat.poc.adapter.gateway.B3GPTGateway;
 import br.com.unicat.poc.adapter.http.dtos.request.CompleteRequestDTO;
-import br.com.unicat.poc.adapter.http.dtos.response.AnalysedLogicResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.CompleteResponseDTO;
+import br.com.unicat.poc.entities.AnalysedLogic;
 import br.com.unicat.poc.entities.GeneratedClass;
 import br.com.unicat.poc.prompts.GenerateUnitTestsPromptGenerator;
 import br.com.unicat.poc.usecases.interfaces.CompleteUnitTestsCreationInterface;
@@ -24,16 +24,16 @@ public class CompleteUnitTestsCreationUseCase implements CompleteUnitTestsCreati
 
   @Override
   public CompleteResponseDTO execute(
-      CompleteRequestDTO requestDTO, AnalysedLogicResponseDTO analysedLogicResponseDTO)
+      CompleteRequestDTO requestDTO, AnalysedLogic analysedLogic)
       throws Exception {
     log.info(
         "INIT CompleteUnitTestsCreationUseCase execute. request: {}, analysed logic: {}",
         requestDTO,
-        analysedLogicResponseDTO);
+        analysedLogic);
 
     ObjectMapper mapper =
         new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-    String testScenariosJson = mapper.writeValueAsString(analysedLogicResponseDTO.testScenarios());
+    String testScenariosJson = mapper.writeValueAsString(analysedLogic.testScenarios());
 
     final var prompt =
         this.generateUnitTestsPromptGenerator.get(

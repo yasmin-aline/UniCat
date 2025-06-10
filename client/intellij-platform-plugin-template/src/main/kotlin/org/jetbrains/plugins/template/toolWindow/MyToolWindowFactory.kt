@@ -295,8 +295,9 @@ class MyToolWindowFactory : ToolWindowFactory {
         private fun buscarCodigoDasDependencias(project: Project, fqns: List<String>): String {
             val facade = com.intellij.psi.JavaPsiFacade.getInstance(project)
             val scope = com.intellij.psi.search.GlobalSearchScope.allScope(project)
+
             val visitados = mutableSetOf<String>()
-            val codigoFonte = mutableListOf<String>()
+            val codigoFonteMap = mutableMapOf<String, String>()
             realDependenciesUsed.clear()
 
             fun processarClasse(fqn: String) {
@@ -312,13 +313,15 @@ class MyToolWindowFactory : ToolWindowFactory {
                 val sourceCode = psiClass?.containingFile?.text
                 if (sourceCode == null) {
                     appendLog("❌ Código não encontrado para: $fqn")
-                    codigoFonte.add("// Classe não encontrada no projeto: $fqn")
+                    // Ainda adiciona a chave para manter formato consistente
+                    codigoFonteMap[fqn] = "// Classe não encontrada no projeto: $fqn"
                     return
                 }
 
                 appendLog("✅ Código encontrado para: $fqn")
-                codigoFonte.add(sourceCode)
+                codigoFonteMap[fqn] = sourceCode
 
+                // Procura importações para identificar sub‑dependências dentro do mesmo domínio
                 val regexImport = Regex("""import\s+((com|br)\.[\w.]+);""")
                 val subDependencies = regexImport.findAll(sourceCode)
                     .map { it.groupValues[1] }
@@ -335,8 +338,13 @@ class MyToolWindowFactory : ToolWindowFactory {
                 }
             }
 
+            // Inicia processamento recursivo
             fqns.forEach { processarClasse(it) }
-            return codigoFonte.joinToString("\n\n")
+
+            // Converte o mapa <FQN, código> para JSON compactado
+            val jsonResult = jacksonObjectMapper().writeValueAsString(codigoFonteMap)
+            appendLog("[INFO] JSON de dependências gerado com tamanho ${jsonResult.length} caracteres.")
+            return jsonResult
         }
 
         private fun enviarRequisicaoInit(project: Project) {
@@ -672,7 +680,7 @@ class MyToolWindowFactory : ToolWindowFactory {
     private var totalTests = 0
     private var passedTests = 0
     private var errorTests = 0
-    private lateinit var coverageReport: Map<String, Any>
+    private var coverageReport: Map<String, Any> = emptyMap()
 
     private fun registrarListenerDeTeste(project: Project) {
         val connection: MessageBusConnection = project.messageBus.connect(project as Disposable)
@@ -768,8 +776,8 @@ class MyToolWindowFactory : ToolWindowFactory {
     }
 
     private fun processRetry(project: Project) {
-        if (retryCount >= 3) {
-            myToolWindowInstance.appendLog("🚫 Limite de tentativas de retry atingido (3). Processo encerrado.")
+        if (retryCount >= 5) {
+            myToolWindowInstance.appendLog("🚫 Limite de tentativas de retry atingido (5). Processo encerrado.")
             return
         }
 
@@ -783,7 +791,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                 "testClassCode" to myToolWindowInstance.testFile.readText(),
                 "dependencies" to myToolWindowInstance.dependenciasCodigo,
                 "dependenciesName" to myToolWindowInstance.realDependenciesUsed.joinToString(","),
-                "failingTestDetailsRequestDTOS" to jacksonObjectMapper().writeValueAsString(errosDeTesteGlobal),
+                "failingTestDetails" to jacksonObjectMapper().writeValueAsString(errosDeTesteGlobal),
                 "testResults" to myToolWindowInstance.lastTestResultsSerialized,
                 "coverageReport" to jacksonObjectMapper().writeValueAsString(coverageReport),
                 "attemptNumber" to retryCount.toString()
@@ -901,6 +909,8 @@ class MyToolWindowFactory : ToolWindowFactory {
         ApplicationManager.getApplication().invokeLater {
             CompilerManager.getInstance(project).make(compileScope) { aborted, errorsCount, _, compileContext ->
                 if (aborted || errorsCount > 0) {
+                    coverageReport = emptyMap()
+                    myToolWindowInstance.appendLog("[INFO] coverageReport resetado devido a erros de compilação.")
                     myToolWindowInstance.appendLog("[INFO] Erros de compilação detectados: $errorsCount. Coletando mensagens.")
 
                     compileContext.getMessages(CompilerMessageCategory.ERROR).forEach { msg ->

@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -22,9 +24,11 @@ public class CompleteUnitTestsCreationUseCase implements CompleteUnitTestsCreati
   private final GenerateUnitTestsPromptGenerator generateUnitTestsPromptGenerator;
   private final B3GPTGateway gateway;
 
+  @Value("classpath:/mocks/prompt-3-chat-response.st")
+  private Resource mockChatResponse;
+
   @Override
-  public CompleteResponseDTO execute(
-      CompleteRequestDTO requestDTO, AnalysedLogic analysedLogic)
+  public CompleteResponseDTO execute(CompleteRequestDTO requestDTO, AnalysedLogic analysedLogic)
       throws Exception {
     log.info(
         "INIT CompleteUnitTestsCreationUseCase execute. request: {}, analysed logic: {}",
@@ -43,7 +47,8 @@ public class CompleteUnitTestsCreationUseCase implements CompleteUnitTestsCreati
             requestDTO.guidelines());
 
     final var chatResponse = this.gateway.callAPI(prompt);
-    final var assistantMessage = chatResponse.getResult().getOutput();
+    final var assistantMessage = chatResponse.getResult().getOutput(); // new
+    // AssistantMessage(mockChatResponse.getContentAsString(Charset.defaultCharset()))
 
     final var generatedClass =
         JsonLlmResponseParser.parseLlmResponse(

@@ -8,12 +8,9 @@ import br.com.unicat.poc.usecases.utilities.JsonLlmResponseParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-
-import java.nio.charset.Charset;
 
 @Slf4j
 @Service
@@ -36,12 +33,13 @@ public class AnalyseLogicAndIdentifyScenariosUseCase
     final var prompt =
         this.analyseLogicAndIdentityScenariosPromptGenerator.get(dependencies, dependenciesName);
 
-//    final var chatResponse =  this.b3gptGateway.callAPI(prompt);
-//    final var assistantMessage = chatResponse.getResult().getOutput();
+    final var chatResponse = this.b3gptGateway.callAPI(prompt);
+    final var assistantMessage = chatResponse.getResult().getOutput(); // new
+    // AssistantMessage(mockChatResponse.getContentAsString(Charset.defaultCharset()))
 
     final var analysedLogic =
         JsonLlmResponseParser.parseLlmResponse(
-            new AssistantMessage(mockChatResponse.getContentAsString(Charset.defaultCharset())), new TypeReference<AnalysedLogic>() {});
+            assistantMessage, new TypeReference<AnalysedLogic>() {});
 
     log.info(
         "END AnalyseLogicAndIdentifyScenariosUseCase execute. analysedLogic: {}", analysedLogic);

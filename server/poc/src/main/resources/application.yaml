@@ -9,6 +9,6 @@ spring:
         api-key: ${UNICAT-AZURE-OPENAI-API-KEY:}
         chat:
           options:
-            deployment-name: gpt4o-mini
+            deployment-name: gpt4o
             temperature: 0.3
             max-tokens: 4096

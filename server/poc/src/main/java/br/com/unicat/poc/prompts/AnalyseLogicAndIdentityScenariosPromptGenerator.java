@@ -2,6 +2,7 @@ package br.com.unicat.poc.prompts;
 
 import br.com.unicat.poc.adapter.http.context.RequestContext;
 import br.com.unicat.poc.adapter.http.context.RequestContextHolder;
+import java.util.Map;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -10,34 +11,37 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-
 @Component
 public class AnalyseLogicAndIdentityScenariosPromptGenerator {
 
-    @Value("classpath:/prompts/v3/2-Analisar-Lógica-e-Identificar-Cenários.st")
-    private Resource templateResource;
+  @Value("classpath:/prompts/v3/2-Analisar-Lógica-e-Identificar-Cenários.st")
+  private Resource templateResource;
 
-    public Prompt get(final String dependenciesCode, final String dependenciesName) {
-        RequestContext context = RequestContextHolder.getContext();
-        final String targetClassName =
-                context.getTargetClassPackage() + "." + context.getTargetClassName();
+  public Prompt get(final String dependenciesCode, final String dependenciesName) {
+    RequestContext context = RequestContextHolder.getContext();
+    final String targetClassName =
+        context.getTargetClassPackage() + "." + context.getTargetClassName();
 
-        PromptTemplate promptTemplate = PromptTemplate.builder()
-                .renderer(StTemplateRenderer.builder().startDelimiterToken('$').endDelimiterToken('$').build())
-                .resource(this.templateResource)
-                .build();
+    PromptTemplate promptTemplate =
+        PromptTemplate.builder()
+            .renderer(
+                StTemplateRenderer.builder()
+                    .startDelimiterToken('$')
+                    .endDelimiterToken('$')
+                    .build())
+            .resource(this.templateResource)
+            .build();
 
-        final Map<String, Object> vars = Map.of(
-                "targetClassName", targetClassName,
-                "targetClassCode", context.getTargetClassCode(),
-                "dependenciesName", dependenciesName,
-                "dependenciesCode", dependenciesCode
-        );
+    final Map<String, Object> vars =
+        Map.of(
+            "targetClassName", targetClassName,
+            "targetClassCode", context.getTargetClassCode(),
+            "dependenciesName", dependenciesName,
+            "dependenciesCode", dependenciesCode);
 
-        final var promptText = promptTemplate.render(vars);
-        final var userMessage = new UserMessage(promptText);
+    final var promptText = promptTemplate.render(vars);
+    final var userMessage = new UserMessage(promptText);
 
-        return new Prompt(userMessage);
-    }
+    return new Prompt(userMessage);
+  }
 }

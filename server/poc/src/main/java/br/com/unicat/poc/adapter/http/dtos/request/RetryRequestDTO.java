@@ -7,7 +7,7 @@ public record RetryRequestDTO(
     String testClassCode,
     String dependencies,
     String dependenciesName,
-    String failingTestDetailsRequestDTOS,
+    String failingTestDetails,
     String testResults,
     String coverageReport,
     String attemptNumber) {}

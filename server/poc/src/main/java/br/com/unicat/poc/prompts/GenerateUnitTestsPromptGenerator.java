@@ -2,6 +2,7 @@ package br.com.unicat.poc.prompts;
 
 import br.com.unicat.poc.adapter.http.context.RequestContext;
 import br.com.unicat.poc.adapter.http.context.RequestContextHolder;
+import java.util.Map;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -9,8 +10,6 @@ import org.springframework.ai.template.st.StTemplateRenderer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
-
-import java.util.Map;
 
 @Component
 public class GenerateUnitTestsPromptGenerator {
@@ -27,19 +26,24 @@ public class GenerateUnitTestsPromptGenerator {
     final var targetClassName =
         context.getTargetClassPackage() + "." + context.getTargetClassName();
 
-    PromptTemplate promptTemplate = PromptTemplate.builder()
-            .renderer(StTemplateRenderer.builder().startDelimiterToken('$').endDelimiterToken('$').build())
+    PromptTemplate promptTemplate =
+        PromptTemplate.builder()
+            .renderer(
+                StTemplateRenderer.builder()
+                    .startDelimiterToken('$')
+                    .endDelimiterToken('$')
+                    .build())
             .resource(this.templateResource)
             .build();
 
-    final Map<String, Object> vars = Map.of(
+    final Map<String, Object> vars =
+        Map.of(
             "targetClassName", targetClassName,
             "targetClassCode", context.getTargetClassCode(),
             "dependenciesName", dependenciesName,
             "dependenciesCode", dependenciesCode,
             "testScenarios", testScenarios,
-            "guidelines", guidelines
-    );
+            "guidelines", guidelines);
 
     final var promptText = promptTemplate.render(vars);
     final var userMessage = new UserMessage(promptText);

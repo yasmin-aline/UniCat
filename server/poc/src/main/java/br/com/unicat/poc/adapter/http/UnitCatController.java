@@ -34,7 +34,7 @@ public class UnitCatController {
   @PostMapping(path = "/init")
   public ResponseEntity<InitResponseDTO> init(final RequestContext requestContext)
       throws Exception {
-    log.info("INIT init. requestContext: {}", requestContext);
+    log.info("INIT init.");
     final InitResponseDTO ans = this.initUnitTestsCreation.execute();
 
     log.info("END init. ans: {}", ans);
@@ -45,7 +45,7 @@ public class UnitCatController {
   public ResponseEntity<CompleteResponseDTO> complete(
       @ModelAttribute final CompleteRequestDTO requestDTO, final RequestContext requestContext)
       throws Exception {
-    log.info("INIT complete. requestDTO: {}", requestDTO);
+    log.info("INIT complete.");
     final var analysedLogicResponseDTO =
         this.analyseLogicAndIdentifyScenariosUseCase.execute(
             requestDTO.dependenciesName(), requestDTO.dependencies());
@@ -60,7 +60,7 @@ public class UnitCatController {
   public ResponseEntity<RefactoredUnitTestResponseDTO> retry(
       @ModelAttribute final RetryRequestDTO requestDTO, final RequestContext requestContext)
       throws Exception {
-    log.info("INIT retry. requestDTO: {}", requestDTO);
+    log.info("INIT retry.");
     final var testResults = this.stacktraceInterpreterUseCase.execute(requestDTO);
 
     final RefactoredUnitTestResponseDTO ans =

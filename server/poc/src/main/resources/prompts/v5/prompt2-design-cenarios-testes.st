@@ -12,16 +12,16 @@ Criar uma especificação completa e estruturada de todos os cenários de teste 
 ## Entrada
 ```
 CLASSE ALVO:
-[CÓDIGO JAVA DA CLASSE A SER TESTADA]
+$targetClassCode$
 
 ANÁLISE DA CLASSE:
-[JSON DO PROMPT 1]
+$prompt1Answer$
 
 DEPENDÊNCIAS:
-[CÓDIGO DAS DEPENDÊNCIAS IDENTIFICADAS]
+$dependenciesCode$
 
 DIRETRIZES (OPCIONAL):
-[PADRÕES ESPECÍFICOS DE TESTE DA EMPRESA]
+$guidelines$
 ```
 
 ## Processo de Análise (Chain of Thought)
@@ -90,7 +90,7 @@ Siga estes passos mentalmente:
               }
             ],
             "expectedBehavior": {
-              "return": "UserDTO{id=1, name='John Doe', age=25}",
+              "returning": "UserDTO{id=1, name='John Doe', age=25}",
               "verifications": [
                 "verify userRepository.save() called exactly once",
                 "verify saved User has name='John Doe' and age=25"
@@ -185,7 +185,7 @@ public class OrderService {
               }
             ],
             "expectedBehavior": {
-              "return": "OrderDTO{id=1, status='PAID'}",
+              "returning": "OrderDTO{id=1, status='PAID'}",
               "verifications": [
                 "verify paymentClient.processPayment() called once with amount=500.00",
                 "verify orderRepository.save() called once",
@@ -209,7 +209,7 @@ public class OrderService {
               }
             ],
             "expectedBehavior": {
-              "return": "OrderDTO{id=2, status='PENDING_APPROVAL'}",
+              "returning": "OrderDTO{id=2, status='PENDING_APPROVAL'}",
               "verifications": [
                 "verify paymentClient.processPayment() never called",
                 "verify orderRepository.save() called once",
@@ -240,7 +240,7 @@ public class OrderService {
               }
             ],
             "expectedBehavior": {
-              "return": "OrderDTO{id=3, status='PAID'}",
+              "returning": "OrderDTO{id=3, status='PAID'}",
               "verifications": [
                 "verify paymentClient.processPayment() called once",
                 "verify orderRepository.save() called once"
@@ -288,7 +288,7 @@ public class OrderService {
               }
             ],
             "expectedBehavior": {
-              "return": "OrderDTO{id=4, status='PAYMENT_FAILED'}",
+              "returning": "OrderDTO{id=4, status='PAYMENT_FAILED'}",
               "verifications": [
                 "verify paymentClient.processPayment() called once",
                 "verify orderRepository.save() called once",

@@ -1,6 +1,6 @@
 package br.com.unicat.poc.v1.usecases.interfaces;
 
-import br.com.unicat.poc.v1.adapter.http.dtos.response.RefactoredUnitTestResponseDTO;
+import br.com.unicat.poc.v1.controller.dtos.response.RefactoredUnitTestResponseDTO;
 import br.com.unicat.poc.v1.entities.TestResults;
 
 public interface RefactorFailingUnitTestsInterface {

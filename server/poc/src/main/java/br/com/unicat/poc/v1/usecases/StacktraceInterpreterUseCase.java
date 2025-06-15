@@ -1,14 +1,14 @@
 package br.com.unicat.poc.v1.usecases;
 
-import br.com.unicat.poc.v1.adapter.gateway.B3GPTGateway;
-import br.com.unicat.poc.v1.adapter.http.dtos.request.RetryRequestDTO;
-import br.com.unicat.poc.v1.adapter.http.dtos.request.TestResultsRequestDTO;
+import br.com.unicat.poc.shared.gateway.B3GPTGateway;
+import br.com.unicat.poc.v1.controller.dtos.request.RetryRequestDTO;
+import br.com.unicat.poc.v1.controller.dtos.request.TestResultsRequestDTO;
 import br.com.unicat.poc.v1.entities.CoverageReport;
 import br.com.unicat.poc.v1.entities.FailedDetails;
 import br.com.unicat.poc.v1.entities.TestResults;
 import br.com.unicat.poc.v1.prompts.StacktraceInterpreterPromptGenerator;
 import br.com.unicat.poc.v1.usecases.interfaces.StacktraceInterpreterInterface;
-import br.com.unicat.poc.v1.usecases.utilities.JsonLlmResponseParser;
+import br.com.unicat.poc.shared.utilities.JsonLlmResponseParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;

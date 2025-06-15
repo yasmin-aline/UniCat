@@ -1,7 +1,7 @@
 package br.com.unicat.poc.v1.prompts;
 
-import br.com.unicat.poc.v1.adapter.http.context.RequestContext;
-import br.com.unicat.poc.v1.adapter.http.context.RequestContextHolder;
+import br.com.unicat.poc.v1.controller.context.RequestContext;
+import br.com.unicat.poc.v1.controller.context.RequestContextHolder;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 

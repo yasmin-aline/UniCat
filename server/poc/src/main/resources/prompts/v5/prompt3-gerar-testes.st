@@ -12,16 +12,16 @@ Transformar as especificações de teste em código Java executável, implementa
 ## Entrada
 ```
 ESPECIFICAÇÕES DE TESTE:
-[JSON DO PROMPT 2 COM TODOS OS CENÁRIOS]
+$prompt2Answer$
 
 CLASSE ORIGINAL:
-[CÓDIGO DA CLASSE A SER TESTADA]
+$targetClassCode$
 
 DEPENDÊNCIAS:
-[CÓDIGO DAS CLASSES DEPENDENTES]
+$dependenciesCode$
 
 DIRETRIZES DE TESTE (OPCIONAL):
-[PADRÕES ESPECÍFICOS DA EMPRESA]
+$guidelines$
 ```
 
 ## Processo de Implementação (Step-by-Step)

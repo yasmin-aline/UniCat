@@ -1,10 +1,10 @@
 package br.com.unicat.poc.v1.usecases;
 
-import br.com.unicat.poc.v1.adapter.gateway.B3GPTGateway;
+import br.com.unicat.poc.shared.gateway.B3GPTGateway;
 import br.com.unicat.poc.v1.entities.AnalysedLogic;
 import br.com.unicat.poc.v1.prompts.AnalyseLogicAndIdentityScenariosPromptGenerator;
 import br.com.unicat.poc.v1.usecases.interfaces.AnalyseLogicAndIdentifyScenariosInterface;
-import br.com.unicat.poc.v1.usecases.utilities.JsonLlmResponseParser;
+import br.com.unicat.poc.shared.utilities.JsonLlmResponseParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

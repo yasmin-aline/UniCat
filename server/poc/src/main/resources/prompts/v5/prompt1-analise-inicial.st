@@ -11,7 +11,7 @@ Analisar a classe Java fornecida e extrair todas as informações necessárias p
 
 ## Entrada
 ```java
-[CLASSE JAVA COMPLETA COM PACKAGE, IMPORTS E CÓDIGO]
+$targetClassCode$
 ```
 
 ## Processo de Análise (Chain of Thought)
@@ -65,7 +65,7 @@ Retorne APENAS o JSON, sem explicações adicionais:
 {
   "dependencies": [
     {
-      "import": "caminho.completo.da.Classe",
+      "importing": "caminho.completo.da.Classe",
       "type": "MOCK" // MOCK, ENUM, DTO, UTILITY
     }
   ],
@@ -146,23 +146,23 @@ public class UserService {
 {
   "dependencies": [
     {
-      "import": "com.exemplo.repository.UserRepository",
+      "importing": "com.exemplo.repository.UserRepository",
       "type": "MOCK"
     },
     {
-      "import": "com.exemplo.client.EmailClient",
+      "importing": "com.exemplo.client.EmailClient",
       "type": "MOCK"
     },
     {
-      "import": "com.exemplo.dto.UserDTO",
+      "importing": "com.exemplo.dto.UserDTO",
       "type": "DTO"
     },
     {
-      "import": "com.exemplo.enums.UserStatus",
+      "importing": "com.exemplo.enums.UserStatus",
       "type": "ENUM"
     },
     {
-      "import": "com.exemplo.utils.ValidationUtils",
+      "importing": "com.exemplo.utils.ValidationUtils",
       "type": "UTILITY"
     }
   ],

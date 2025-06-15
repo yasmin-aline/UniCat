@@ -1,13 +1,13 @@
 package br.com.unicat.poc.v1.usecases;
 
-import br.com.unicat.poc.v1.adapter.gateway.B3GPTGateway;
-import br.com.unicat.poc.v1.adapter.http.dtos.request.CompleteRequestDTO;
-import br.com.unicat.poc.v1.adapter.http.dtos.response.CompleteResponseDTO;
+import br.com.unicat.poc.shared.gateway.B3GPTGateway;
+import br.com.unicat.poc.v1.controller.dtos.request.CompleteRequestDTO;
+import br.com.unicat.poc.v1.controller.dtos.response.CompleteResponseDTO;
 import br.com.unicat.poc.v1.entities.AnalysedLogic;
 import br.com.unicat.poc.v1.entities.GeneratedClass;
 import br.com.unicat.poc.v1.prompts.GenerateUnitTestsPromptGenerator;
 import br.com.unicat.poc.v1.usecases.interfaces.CompleteUnitTestsCreationInterface;
-import br.com.unicat.poc.v1.usecases.utilities.JsonLlmResponseParser;
+import br.com.unicat.poc.shared.utilities.JsonLlmResponseParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;

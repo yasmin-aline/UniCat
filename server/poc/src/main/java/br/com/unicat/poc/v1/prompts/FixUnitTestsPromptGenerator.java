@@ -1,6 +1,6 @@
 package br.com.unicat.poc.v1.prompts;
 
-import br.com.unicat.poc.v1.adapter.http.context.RequestContextHolder;
+import br.com.unicat.poc.v1.controller.context.RequestContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;

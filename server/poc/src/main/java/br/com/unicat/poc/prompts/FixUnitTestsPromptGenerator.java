@@ -14,8 +14,8 @@ public class FixUnitTestsPromptGenerator {
       final String dependenciesList,
       final String originalTestClassCode,
       final String failingTestsDetails,
-	  final String coverageDetails,
-	  final String attemptNumber) {
+      final String coverageDetails,
+      final String attemptNumber) {
     final var context = RequestContextHolder.getContext();
     final var targetClassName =
         context.getTargetClassPackage() + "." + context.getTargetClassName();
@@ -24,21 +24,21 @@ public class FixUnitTestsPromptGenerator {
         String.format(
             """
 					# Prompt para Use Case: Corrigir Testes Unitários Falhos (Versão 5 - Saída JSON, CoT & Few-Shot Complexo com Análise de Cobertura e Otimização por Tentativas)
-				
+
 				   **Objetivo:** Analisar testes unitários JUnit 5 que falharam, identificar a causa raiz via Chain-of-Thought (CoT), corrigir os métodos de teste ou comentá-los com explicação se forem logicamente impossíveis de passar com o código atual. **Priorizar a correção para alcançar 100%% de cobertura de linha e sucesso na execução dos testes.** Retornar apenas os métodos modificados (corrigidos ou comentados) e quaisquer novos imports necessários em formato JSON.
-			
+
 				   **Instruções:**
-			
+
 				   1.  **Entendimento Completo:** Receba o código da classe alvo (`%s`), o código de suas dependências (`%s`), o código completo da classe de teste original (`{{ CODIGO_TESTE_ORIGINAL_COMPLETO }}`), uma lista detalhada dos testes que falharam (`{{ DETALHES_TESTES_FALHOS_JSON }}`), **informações de cobertura de linha da classe alvo** (`{{ COBERTURA_LINHA_JSON }}`), e o **número da tentativa atual** (`%s`). Você possui todas as informações necessárias para diagnosticar e corrigir os testes de forma autônoma e completa.
 					   *   **Otimização por Tentativa:** Você terá um máximo de 5 tentativas para ajustar o código. À medida que `{{ ATTEMPT_NUMBER }}` (%s) se aproxima de 3, maximize a assertividade e a busca por correção nas suas respostas. Na 5ª tentativa, se ainda houver testes falhando, adicione comentários detalhados conforme instruído no ponto 3.c.
-			
+
 				   2.  **Análise Chain-of-Thought (CoT) por Teste Falho:** Para CADA teste listado em `{{ DETALHES_TESTES_FALHOS_JSON }}`, realize um raciocínio passo a passo INTERNO e DETALHADO para diagnosticar a falha. **Considere também as informações de cobertura de linha para entender se a falha está relacionada a um caminho de código não coberto ou mal testado.**
 					   *   **Localize o Teste:** Identifique o método de teste correspondente em `{{ CODIGO_TESTE_ORIGINAL_COMPLETO }}`.
 					   *   **Analise a Falha:** Examine a mensagem de erro e o stack trace fornecidos em `{{ DETALHES_TESTES_FALHOS_JSON }}`. Qual asserção falhou? Qual foi o valor esperado vs. o valor real? Onde a exceção ocorreu?
 					   *   **Analise a Lógica do Teste:** Revise a seção Arrange (setup), Act (execução) e Assert (verificação) do método de teste. Os dados de entrada (Arrange) estão corretos para o cenário pretendido? A chamada no Act está correta? A asserção (Assert) está verificando a condição correta e usando o método de comparação adequado (e.g., `assertEquals(0, expected.compareTo(actual))` para BigDecimal, `assertThrows` para exceções)? **Verifique se a configuração dos mocks está alinhada com o comportamento esperado para o cenário.**
 					   *   **Analise a Lógica da Classe Alvo:** Revise o `%s` (e `%s` se relevante) para entender como ele *deveria* se comportar com os inputs fornecidos no teste. A lógica da classe corresponde à expectativa do teste? **Identifique se a falha ocorre em uma linha de código que não está sendo coberta ou que possui uma lógica complexa que não foi totalmente explorada pelo teste.**
 					   *   **Diagnóstico:** Conclua a causa raiz da falha. Exemplos: erro na lógica do teste (setup errado, asserção incorreta, mock mal configurado), erro sutil na lógica da classe alvo que o teste revelou, ou incompatibilidade fundamental entre o cenário do teste e a implementação da classe.
-			
+
 				   3.  **Ação (Correção ou Comentário):**
 					   *   **Prioridade:** Sua principal prioridade é **corrigir o teste** para que ele passe e contribua para a cobertura de 100%% da classe alvo. **SÓ COMENTE UM TESTE SE FOR ABSOLUTAMENTE IMPOSSÍVEL FAZÊ-LO PASSAR COM A LÓGICA ATUAL DA CLASSE ALVO E SE ISSO NÃO COMPROMETER A COBERTURA DE LINHA ALMEJADA.**
 					   *   **Se a Falha for Corrigível no Teste:** Modifique o método de teste original para corrigir o problema identificado (e.g., ajustar o Arrange, corrigir a asserção, **reconfigurar mocks**).
@@ -69,14 +69,14 @@ public class FixUnitTestsPromptGenerator {
 						   *   Uma justificativa do *porquê não foi possível solucionar o erro* (ex: exige alteração na lógica de negócio da classe alvo, comportamento esperado do teste não alinhado com a implementação).
 						   *   Sugestões sobre *o que o usuário poderia fazer para buscar corrigir* (ex: ajustar a lógica da classe alvo, reavaliar o comportamento esperado do teste, remover o teste se o cenário não for mais relevante).
 					   *   **Preservar Testes Funcionais:** NÃO modifique ou inclua na resposta nenhum método de teste que NÃO estava listado em `{{ DETALHES_TESTES_FALHOS_JSON }}`.
-			
+
 				   4.  **Identificar Novos Imports:** Verifique se as suas correções introduziram a necessidade de novas classes/imports que não estavam presentes no `{{ CODIGO_TESTE_ORIGINAL_COMPLETO }}`.
-			
+
 				   5.  **Formato JSON de Saída:** Retorne sua resposta EXCLUSIVAMENTE como um objeto JSON válido, contendo uma lista dos métodos modificados (corrigidos ou comentados) e uma lista dos novos imports necessários, conforme a estrutura abaixo.
 						*   **Nunca acrescente qualquer outra informação no corpo de resposta além da estrutura JSON de saída esperada informada abaixo! O sistema que recebe a sua resposta espera somente um objeto JSON e se você adicionar qualquer texto antes ou depois, irá quebrar a aplicação e gerar um bug. Não faça isso. Retorne exatamente o que lhe foi pedido.**
-				
+
 				   **Estrutura JSON de Saída Esperada:**
-			
+
 				   ```json
 				   {
 					 "modified_test_methods": [
@@ -97,9 +97,9 @@ public class FixUnitTestsPromptGenerator {
 					 ]
 				   }
 				   ```
-			
+
 				   **Exemplo Few-Shot Complexo (Genérico com Análise de Cobertura):**
-			
+
 				   *   **Input (Parâmetros Injetados):**
 					   *   `{{ CODIGO_CLASSE_ALVO }}`: (Código da classe `SimpleDiscountCalculator` que aplica cap de 50%% em percentual e não negativa preço em fixo)
 					   *   `{{ CODIGOS_DEPENDENCIAS_JSON }}`: (Códigos de `ProductDTO` e `DiscountType`)
@@ -111,7 +111,7 @@ public class FixUnitTestsPromptGenerator {
 							   // ... setUp e createProduct
 							   @Test @DisplayName("Testar cap de 50%%")
 							   void testPercentageCap() { /* ... código correto ... */ }
-			
+
 							   @Test @DisplayName("Testar comparação BigDecimal com equals")
 							   void testBigDecimalComparisonError() {
 								   ProductDTO product = createProduct(100.0);\s
@@ -119,7 +119,7 @@ public class FixUnitTestsPromptGenerator {
 								   BigDecimal actual = calculator.calculateDiscountedPrice(product, DiscountType.PERCENTAGE, BigDecimal.TEN); // Pode retornar 90.00 (Escala 2)
 								   assertEquals(expected, actual); // FALHA: BigDecimal.equals compara valor E escala
 							   }
-			
+
 							   @Test @DisplayName("Testar cenário impossível de preço negativo")
 							   void testImpossibleNegativePrice() {
 								   ProductDTO product = createProduct(10.0);\s
@@ -158,7 +158,7 @@ public class FixUnitTestsPromptGenerator {
 						   }
 						   ```
 					   *   `{{ ATTEMPT_NUMBER }}`: `1` (ou qualquer número de 1 a 5)
-			
+
 				   *   **Output JSON Esperado:**
 					   ```json
 					   {
@@ -175,9 +175,9 @@ public class FixUnitTestsPromptGenerator {
 						 "required_new_imports": []\s
 					   }
 					   ```
-			
+
 				   **Exemplo Few-Shot (Comentário Detalhado na 5ª Tentativa):**
-			
+
 				   *   **Input (Parâmetros Injetados):**
 					   *   `{{ CODIGO_CLASSE_ALVO }}`: (Código da classe `PaymentProcessor` que não lida com moedas diferentes)
 					   *   `{{ CODIGOS_DEPENDENCIAS_JSON }}`: (Códigos de `Transaction` e `Currency`)
@@ -217,7 +217,7 @@ public class FixUnitTestsPromptGenerator {
 						   }
 						   ```
 					   *   `{{ ATTEMPT_NUMBER }}`: `5`
-			
+
 				   *   **Output JSON Esperado:**
 					   ```json
 					   {
@@ -230,9 +230,9 @@ public class FixUnitTestsPromptGenerator {
 						 "required_new_imports": []\s
 					   }
 					   ```
-			
+
 				   **Exemplo Few-Shot (Teste Comentado por Comportamento Incompatível):**
-			
+
 				   *   **Input (Parâmetros Injetados):**
 					   *   `{{ CODIGO_CLASSE_ALVO }}`: (Código da classe `DataFormatter` que sempre retorna string em maiúsculas)
 					   *   `{{ CODIGOS_DEPENDENCIAS_JSON }}`: (Nenhum)
@@ -272,7 +272,7 @@ public class FixUnitTestsPromptGenerator {
 						   }
 						   ```
 					   *   `{{ ATTEMPT_NUMBER }}`: `2`
-			
+
 				   *   **Output JSON Esperado:**
 					   ```json
 					   {
@@ -285,59 +285,73 @@ public class FixUnitTestsPromptGenerator {
 						 "required_new_imports": []\s
 					   }
 					   ```
-			
+
 				   **Sua Tarefa:**
-			
+
 				   Agora, processe os detalhes dos testes falhos (`{{ DETALHES_TESTES_FALHOS_JSON }}`) para a classe (`%s`) e suas dependências (`%s`), usando o código de teste original (`{{ CODIGO_TESTE_ORIGINAL_COMPLETO }}`) e as informações de cobertura (`{{ COBERTURA_LINHA_JSON }}`) como referência. Realize a análise CoT para cada falha e gere a resposta JSON contendo os métodos corrigidos/comentados e novos imports.
-			
+
 				   **Código da Classe Alvo:**
-			
+
 				   ```java
 				   {{ CODIGO_CLASSE_ALVO }}
 				   %s
 				   ```
-			
+
 				   **Códigos das Dependências (JSON):**
-			
+
 				   ```json
 				   {{ CODIGOS_DEPENDENCIAS_JSON }}
 				   %s
 				   ```
-			
+
 				   **Código de Teste Original Completo:**
-			
+
 				   ```java
 				   {{ CODIGO_TESTE_ORIGINAL_COMPLETO }}
 				   %s
 				   ```
-			
+
 				   **Detalhes dos Testes Falhos (JSON):**
-			
+
 				   ```json
 				   {{ DETALHES_TESTES_FALHOS_JSON }}
 				   %s
 				   ```
-			
+
 				   **Informações de Cobertura de Linha (JSON):**
-			
+
 				   ```json
 				   {{ COBERTURA_LINHA_JSON }}
 				   %s
 				   ```
-			
+
 				   **Número da Tentativa Atual:**
-			
+
 				   ```json
 				   {{ ATTEMPT_NUMBER }}
 				   %s
 				   ```
-			
+
 				   **Resposta JSON:**
-			
+
 				   ```json
 				   // Sua resposta JSON aqui
 				   ```
-				""", targetClassName, dependenciesList, attemptNumber, attemptNumber, targetClassName, dependenciesList, targetClassName, dependenciesList, context.getTargetClassCode(), dependencies, originalTestClassCode, failingTestsDetails, coverageDetails, attemptNumber);
+				""",
+            targetClassName,
+            dependenciesList,
+            attemptNumber,
+            attemptNumber,
+            targetClassName,
+            dependenciesList,
+            targetClassName,
+            dependenciesList,
+            context.getTargetClassCode(),
+            dependencies,
+            originalTestClassCode,
+            failingTestsDetails,
+            coverageDetails,
+            attemptNumber);
 
     return new Prompt(prompt);
   }

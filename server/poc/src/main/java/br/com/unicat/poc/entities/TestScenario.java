@@ -1,16 +1,6 @@
 package br.com.unicat.poc.entities;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import java.util.List;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class TestScenario {
-  private String id;
-  private String description;
-  private String expectedOutcomeType;
-}
+public record TestScenario(
+    String id, String description, String expectedOutcomeType, List<MockBehavior> mockBehavior, List<String> inputParameters) {}

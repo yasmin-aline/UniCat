@@ -11,12 +11,11 @@ import br.com.unicat.poc.usecases.interfaces.StacktraceInterpreterInterface;
 import br.com.unicat.poc.usecases.utilities.JsonLlmResponseParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Objects;
 
 @Slf4j
 @Service
@@ -26,17 +25,18 @@ public class StacktraceInterpreterUseCase implements StacktraceInterpreterInterf
   private final B3GPTGateway b3gptGateway;
 
   @Override
-  public TestResults execute(final RetryRequestDTO requestDTO)
-      throws Exception {
+  public TestResults execute(final RetryRequestDTO requestDTO) throws Exception {
     log.info(
         "INIT StacktraceInterpreterUseCase execute. dependenciesName: {}, dep. code is null: {}, failedTestsDetails is null: {}",
-            requestDTO.dependenciesName(),
+        requestDTO.dependenciesName(),
         Objects.isNull(requestDTO.dependencies()),
         Objects.isNull(requestDTO.failingTestDetailsRequestDTOS()));
 
     final var prompt =
         this.stacktraceInterpreterPromptGenerator.get(
-            requestDTO.dependenciesName(), requestDTO.dependencies(), requestDTO.failingTestDetailsRequestDTOS());
+            requestDTO.dependenciesName(),
+            requestDTO.dependencies(),
+            requestDTO.failingTestDetailsRequestDTOS());
 
     final var chatResponse = this.b3gptGateway.callAPI(prompt);
     final var assistantMessage = chatResponse.getResult().getOutput();
@@ -47,10 +47,14 @@ public class StacktraceInterpreterUseCase implements StacktraceInterpreterInterf
     assert failedDetails != null;
 
     String rawText = Objects.requireNonNull(requestDTO.testResults()).trim();
-    final var testResultsDTO = rawText.isEmpty() ? null : new ObjectMapper().readValue(rawText, TestResultsRequestDTO.class);
+    final var testResultsDTO =
+        rawText.isEmpty()
+            ? null
+            : new ObjectMapper().readValue(rawText, TestResultsRequestDTO.class);
 
     String rawText2 = Objects.requireNonNull(requestDTO.coverageReport()).trim();
-    final var coverageReport = rawText2.isEmpty() ? null : new ObjectMapper().readValue(rawText2, CoverageReport.class);
+    final var coverageReport =
+        rawText2.isEmpty() ? null : new ObjectMapper().readValue(rawText2, CoverageReport.class);
 
     log.info("END StacktraceInterpreterUseCase execute. stackTraceInterpreted: {}", failedDetails);
 
@@ -59,12 +63,11 @@ public class StacktraceInterpreterUseCase implements StacktraceInterpreterInterf
     }
 
     return new TestResults(
-            testResultsDTO.totalTests(),
-            testResultsDTO.passedTests(),
-            testResultsDTO.failedTests(),
-            testResultsDTO.errorTests(),
-            failedDetails,
-            coverageReport
-    );
+        testResultsDTO.totalTests(),
+        testResultsDTO.passedTests(),
+        testResultsDTO.failedTests(),
+        testResultsDTO.errorTests(),
+        failedDetails,
+        coverageReport);
   }
 }

@@ -2,8 +2,8 @@ package br.com.unicat.poc.usecases;
 
 import br.com.unicat.poc.adapter.gateway.B3GPTGateway;
 import br.com.unicat.poc.adapter.http.dtos.request.CompleteRequestDTO;
-import br.com.unicat.poc.adapter.http.dtos.response.AnalysedLogicResponseDTO;
 import br.com.unicat.poc.adapter.http.dtos.response.CompleteResponseDTO;
+import br.com.unicat.poc.entities.AnalysedLogic;
 import br.com.unicat.poc.entities.GeneratedClass;
 import br.com.unicat.poc.prompts.GenerateUnitTestsPromptGenerator;
 import br.com.unicat.poc.usecases.interfaces.CompleteUnitTestsCreationInterface;
@@ -13,7 +13,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+
+import java.nio.charset.Charset;
 
 @Slf4j
 @Service
@@ -22,18 +27,20 @@ public class CompleteUnitTestsCreationUseCase implements CompleteUnitTestsCreati
   private final GenerateUnitTestsPromptGenerator generateUnitTestsPromptGenerator;
   private final B3GPTGateway gateway;
 
+  @Value("classpath:/mocks/prompt-3-chat-response.st")
+  private Resource mockChatResponse;
+
   @Override
-  public CompleteResponseDTO execute(
-      CompleteRequestDTO requestDTO, AnalysedLogicResponseDTO analysedLogicResponseDTO)
+  public CompleteResponseDTO execute(CompleteRequestDTO requestDTO, AnalysedLogic analysedLogic)
       throws Exception {
     log.info(
         "INIT CompleteUnitTestsCreationUseCase execute. request: {}, analysed logic: {}",
         requestDTO,
-        analysedLogicResponseDTO);
+        analysedLogic);
 
     ObjectMapper mapper =
         new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-    String testScenariosJson = mapper.writeValueAsString(analysedLogicResponseDTO.testScenarios());
+    String testScenariosJson = mapper.writeValueAsString(analysedLogic.testScenarios());
 
     final var prompt =
         this.generateUnitTestsPromptGenerator.get(
@@ -47,7 +54,8 @@ public class CompleteUnitTestsCreationUseCase implements CompleteUnitTestsCreati
 
     final var generatedClass =
         JsonLlmResponseParser.parseLlmResponse(
-            assistantMessage, new TypeReference<GeneratedClass>() {});
+//            new AssistantMessage(this.mockChatResponse.getContentAsString(Charset.defaultCharset())),
+                assistantMessage, new TypeReference<GeneratedClass>() {});
     assert generatedClass != null;
 
     log.info("END CompleteUnitTestsCreationUseCase execute. generatedClass: {}", generatedClass);

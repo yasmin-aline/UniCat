@@ -31,8 +31,7 @@ public class RefactorFailingUnitTestsUseCase implements RefactorFailingUnitTests
       final String attemptNumber)
       throws Exception {
     log.info(
-        "INIT RefactorFailingUnitTestsUseCase execute. stacktraceInterpretedList: {}",
-            testResults);
+        "INIT RefactorFailingUnitTestsUseCase execute. stacktraceInterpretedList: {}", testResults);
 
     ObjectMapper mapper =
         new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
@@ -42,11 +41,13 @@ public class RefactorFailingUnitTestsUseCase implements RefactorFailingUnitTests
     final var num = Integer.parseInt(attemptNumber) + 1;
     var str = String.valueOf(num);
     if (num >= 3) {
-      str += "\nLimite de attemps atingido! Comente todos os testes que ainda estão falhando com a devida justificativa.";
+      str +=
+          "\nLimite de attemps atingido! Comente todos os testes que ainda estão falhando com a devida justificativa.";
     }
 
     final var prompt =
-        this.fixUnitTestsPromptGenerator.get(dependencies, dependenciesName, testClassCode, testResultsJSON, coverageDetails, str);
+        this.fixUnitTestsPromptGenerator.get(
+            dependencies, dependenciesName, testClassCode, testResultsJSON, coverageDetails, str);
 
     final var chatResponse = this.b3gptGateway.callAPI(prompt);
     final var assistantMessage = chatResponse.getResult().getOutput();

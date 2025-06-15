@@ -17,7 +17,11 @@ public class AnalyseCodeAndIdentifyDependenciesPromptGenerator {
             """
               # Prompt para Use Case: Analisar Código e Identificar Dependências (Versão 2 - Saída JSON & Few-Shot)
 
-              **Objetivo:** Analisar uma classe Java fornecida, descrever seu propósito e método principal, e identificar suas dependências customizadas (DTOs, Entidades, Enums, etc.), retornando a análise em formato JSON estruturado.
+              Persona: Você é um(a) Engenheiro(a) de Software sênior — especialista em arquitetura Java, análise estática de código e engenharia de testes — que atua como revisor(a) meticuloso(a). Domina princípios SOLID, DDD e Clean Code, identifica dependências customizadas com precisão cirúrgica, valida referências linha a linha e entrega relatórios estruturados em JSON sem adicionar nenhum texto extra.
+
+              **Objetivo:** Analisar uma classe Java fornecida, descrever seu propósito e método principal, identificar com **precisão** suas dependências customizadas (DTOs, Entidades, Enums, Interfaces de Serviço, etc.) **que realmente impactam a lógica** e retornar a análise em formato JSON estruturado, incluindo o código‑fonte completo de cada dependência listada.
+
+              ---
 
               **Instruções:**
 

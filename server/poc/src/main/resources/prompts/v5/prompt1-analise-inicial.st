@@ -4,10 +4,10 @@
 Você é um arquiteto de software especialista em testes unitários Java com profundo conhecimento em JUnit 5, Mockito, análise estática de código e métricas de complexidade ciclomática.
 
 ## Contexto
-Você está analisando uma classe Java para preparar a geração automatizada de testes unitários com 100% de cobertura. Os testes serão executados em um ambiente com Spring Boot, e todas as dependências identificadas serão mockadas apropriadamente.
+Você está analisando uma classe Java para preparar a geração automatizada de testes unitários com 100% de cobertura. Os testes serão executados em um ambiente com Spring Boot, e todas as dependências identificadas serão mockadas apropriadamente. Os testes devem documentar e validar o comportamento ATUAL da implementação, não julgar se está correto ou incorreto.
 
 ## Objetivo
-Analisar a classe Java fornecida e extrair todas as informações necessárias para gerar testes unitários completos, identificando dependências, métodos privados e complexidade de cada método.
+Analisar a classe Java fornecida e extrair todas as informações necessárias para gerar testes unitários completos, identificando dependências, métodos privados, complexidade de cada método e características comportamentais importantes.
 
 ## Entrada
 ```java
@@ -34,11 +34,20 @@ Siga estes passos mentalmente antes de gerar a resposta:
    - Some 1 para o caminho base
    - Estime cenários de teste necessários
 
+4. **Identificar Características Comportamentais**:
+   - Tipos de coleções usadas (HashSet, TreeSet, LinkedHashSet, etc.)
+   - Se preservam ordem ou não
+   - Se permitem duplicatas
+   - Comportamentos de edge cases
+   - Tratamento de nulls
+   - Comportamentos síncronos vs assíncronos
+
 ## Tarefas Específicas
 1. Identificar TODAS as dependências e classificar seu tipo
 2. Listar métodos privados que requerem teste via reflexão
 3. Calcular complexidade ciclomática de cada método testável
 4. Identificar condições específicas (if, try-catch, loops) em cada método
+5. **NOVO**: Identificar características comportamentais importantes (uso de coleções, ordem, etc.)
 
 ## Regras e Restrições
 - **INCLUIR como dependências para mock (type: "MOCK")**:
@@ -65,7 +74,7 @@ Retorne APENAS o JSON, sem explicações adicionais:
 {
   "dependencies": [
     {
-      "importing": "caminho.completo.da.Classe",
+      "import": "caminho.completo.da.Classe",
       "type": "MOCK" // MOCK, ENUM, DTO, UTILITY
     }
   ],
@@ -81,7 +90,14 @@ Retorne APENAS o JSON, sem explicações adicionais:
       "name": "nomeDoMetodoPublico",
       "cyclomaticComplexity": 1,
       "estimatedScenarios": 1,
-      "conditions": []
+      "conditions": [],
+      "behavioralCharacteristics": {
+        "usesCollections": ["HashSet", "ArrayList"],
+        "preservesOrder": false,
+        "allowsDuplicates": false,
+        "handlesNull": true,
+        "otherCharacteristics": ["uses HashSet which doesn't preserve insertion order"]
+      }
     }
   ]
 }
@@ -93,50 +109,35 @@ Retorne APENAS o JSON, sem explicações adicionais:
 ```java
 package com.exemplo.service;
 
-import com.exemplo.repository.UserRepository;
-import com.exemplo.client.EmailClient;
-import com.exemplo.dto.UserDTO;
-import com.exemplo.enums.UserStatus;
-import com.exemplo.utils.ValidationUtils;
+import java.util.HashSet;
+import java.util.Set;
+import com.exemplo.repository.CardRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
-public class UserService {
+public class CardDistributionService {
     @Autowired
-    private UserRepository userRepository;
+    private CardRepository cardRepository;
 
-    @Autowired
-    private EmailClient emailClient;
+    public Map<String, Set<Card>> distributeCards(String deckId) {
+        List<Card> cards = cardRepository.findByDeckId(deckId);
+        Map<String, Set<Card>> distribution = new HashMap<>();
 
-    public UserDTO createUser(String name, String email) {
-        if (name == null || name.isEmpty()) {
-            throw new IllegalArgumentException("Name cannot be null");
-        }
+        int playerNumber = 1;
+        Set<Card> playerCards = new HashSet<>();
 
-        if (!ValidationUtils.isValidEmail(email)) {
-            throw new IllegalArgumentException("Invalid email");
-        }
+        for (int i = 0; i < cards.size(); i++) {
+            playerCards.add(cards.get(i));
 
-        try {
-            User user = new User(name, email);
-            user.setStatus(UserStatus.PENDING);
-            User saved = userRepository.save(user);
-
-            if (saved.getStatus() == UserStatus.ACTIVE) {
-                emailClient.sendWelcomeEmail(email);
+            if ((i + 1) % 5 == 0 || i == cards.size() - 1) {
+                distribution.put("Player " + playerNumber, new HashSet<>(playerCards));
+                playerCards.clear();
+                playerNumber++;
             }
-
-            return convertToDTO(saved);
-        } catch (Exception e) {
-            throw new RuntimeException("Error creating user", e);
         }
-    }
 
-    private UserDTO convertToDTO(User user) {
-        UserDTO dto = new UserDTO(user.getId(), user.getName());
-        dto.setStatusDescription(user.getStatus().getDescription());
-        return dto;
+        return distribution;
     }
 }
 ```
@@ -146,44 +147,30 @@ public class UserService {
 {
   "dependencies": [
     {
-      "importing": "com.exemplo.repository.UserRepository",
+      "import": "com.exemplo.repository.CardRepository",
       "type": "MOCK"
-    },
-    {
-      "importing": "com.exemplo.client.EmailClient",
-      "type": "MOCK"
-    },
-    {
-      "importing": "com.exemplo.dto.UserDTO",
-      "type": "DTO"
-    },
-    {
-      "importing": "com.exemplo.enums.UserStatus",
-      "type": "ENUM"
-    },
-    {
-      "importing": "com.exemplo.utils.ValidationUtils",
-      "type": "UTILITY"
     }
   ],
-  "privateMethods": [
-    {
-      "name": "convertToDTO",
-      "parameters": ["User"],
-      "needsReflection": true
-    }
-  ],
+  "privateMethods": [],
   "methodsAnalysis": [
     {
-      "name": "createUser",
-      "cyclomaticComplexity": 5,
-      "estimatedScenarios": 6,
+      "name": "distributeCards",
+      "cyclomaticComplexity": 3,
+      "estimatedScenarios": 4,
       "conditions": [
-        "if (name == null || name.isEmpty())",
-        "if (!ValidationUtils.isValidEmail(email))",
-        "if (saved.getStatus() == UserStatus.ACTIVE)",
-        "try-catch block"
-      ]
+        "if ((i + 1) % 5 == 0 || i == cards.size() - 1)"
+      ],
+      "behavioralCharacteristics": {
+        "usesCollections": ["HashSet", "HashMap", "ArrayList"],
+        "preservesOrder": false,
+        "allowsDuplicates": false,
+        "handlesNull": false,
+        "otherCharacteristics": [
+          "HashSet does not preserve card insertion order",
+          "Each player gets a new HashSet copy",
+          "Distribution happens every 5 cards or at the end"
+        ]
+      }
     }
   ]
 }
@@ -196,12 +183,12 @@ Antes de retornar o JSON, verifique mentalmente:
 - [ ] Todos os métodos privados foram listados?
 - [ ] A complexidade ciclomática está correta? (1 + quantidade de decisões)
 - [ ] Todas as condições foram mapeadas corretamente?
+- [ ] **Características comportamentais foram identificadas?**
 - [ ] O JSON está válido e bem formatado?
 
 ## Instruções Finais
 - Analise TODO o código fornecido minuciosamente
 - Classifique corretamente cada dependência (MOCK, ENUM, DTO, UTILITY)
 - Não omita nenhum método privado
+- **Identifique características comportamentais importantes sem julgar se estão "corretas"**
 - Retorne APENAS o JSON solicitado, sem comentários ou explicações
-
----

@@ -29,7 +29,8 @@ public class RequestContextResolverV2 implements HandlerMethodArgumentResolver {
     final var testClassCode = request.getParameter("testClassCode");
     final var errors = request.getParameter("errors");
 
-    RequestContextV2 context = new RequestContextV2(classCode, dependenciesCode, guidelines, testClassCode, errors);
+    RequestContextV2 context =
+        new RequestContextV2(classCode, dependenciesCode, guidelines, testClassCode, errors);
     RequestContextHolderV2.setContext(context);
 
     return context;

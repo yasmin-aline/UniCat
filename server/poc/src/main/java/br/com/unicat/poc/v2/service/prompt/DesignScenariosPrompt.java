@@ -1,7 +1,10 @@
 package br.com.unicat.poc.v2.service.prompt;
 
+import static java.util.Objects.isNull;
+
 import br.com.unicat.poc.v2.controller.context.RequestContextHolderV2;
 import br.com.unicat.poc.v2.controller.context.RequestContextV2;
+import java.util.Map;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -10,43 +13,44 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-
-import static java.util.Objects.isNull;
-
 @Component
 public class DesignScenariosPrompt {
 
-	@Value("classpath:/prompts/v5/prompt2-design-cenarios-testes.st")
-	private Resource templateResource;
+  @Value("classpath:/prompts/v5/prompt2-design-cenarios-testes.st")
+  private Resource templateResource;
 
-	public Prompt get(final String prompt1Answer) {
-		RequestContextV2 contextV2 = RequestContextHolderV2.getContext();
+  public Prompt get(final String prompt1Answer) {
+    RequestContextV2 contextV2 = RequestContextHolderV2.getContext();
 
-		PromptTemplate promptTemplate =
-				PromptTemplate.builder()
-						.renderer(
-								StTemplateRenderer.builder()
-										.startDelimiterToken('$')
-										.endDelimiterToken('$')
-										.build())
-						.resource(this.templateResource)
-						.build();
+    PromptTemplate promptTemplate =
+        PromptTemplate.builder()
+            .renderer(
+                StTemplateRenderer.builder()
+                    .startDelimiterToken('$')
+                    .endDelimiterToken('$')
+                    .build())
+            .resource(this.templateResource)
+            .build();
 
-		final var guidelines = isNull(contextV2.guidelines()) || contextV2.guidelines().isEmpty() ? "null" : contextV2.guidelines();
+    final var guidelines =
+        isNull(contextV2.guidelines()) || contextV2.guidelines().isEmpty()
+            ? "null"
+            : contextV2.guidelines();
 
-		final Map<String, Object> vars =
-				Map.of(
-						"targetClassCode", contextV2.targetClassCode(),
-						"dependenciesCode", contextV2.dependenciesCode(),
-						"guidelines", guidelines,
-						"prompt1Answer", prompt1Answer
-				);
+    final Map<String, Object> vars =
+        Map.of(
+            "targetClassCode",
+            contextV2.targetClassCode(),
+            "dependenciesCode",
+            contextV2.dependenciesCode(),
+            "guidelines",
+            guidelines,
+            "prompt1Answer",
+            prompt1Answer);
 
-		final var promptText = promptTemplate.render(vars);
-		final var userMessage = new UserMessage(promptText);
+    final var promptText = promptTemplate.render(vars);
+    final var userMessage = new UserMessage(promptText);
 
-		return new Prompt(userMessage);
-	}
-
+    return new Prompt(userMessage);
+  }
 }

@@ -19,25 +19,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(path = "/api/v2/unicat")
 public class UniCatControllerV2 {
 
-	private final GenerateUnitTestsUseCase generateUnitTestsUseCase;
-	private final FixUnitTestsUseCase fixUnitTestsUseCase;
+  private final GenerateUnitTestsUseCase generateUnitTestsUseCase;
+  private final FixUnitTestsUseCase fixUnitTestsUseCase;
 
-	@PostMapping(path = "/generate", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-	ResponseEntity<String> generate(RequestContextV2 requestContextV2) throws Exception {
-		log.info("INIT generate.");
-		final var ans = this.generateUnitTestsUseCase.execute();
+  @PostMapping(path = "/generate", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+  ResponseEntity<String> generate(RequestContextV2 requestContextV2) throws Exception {
+    log.info("INIT generate.");
+    final var ans = this.generateUnitTestsUseCase.execute();
 
-		log.info("FINISH generate.");
-		return ResponseEntity.status(HttpStatus.OK).body(ans);
-	}
+    log.info("FINISH generate.");
+    return ResponseEntity.status(HttpStatus.OK).body(ans);
+  }
 
-	@PostMapping(path = "/fix", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-	ResponseEntity<FixedUnitTests> fix(RequestContextV2 requestContextV2) throws Exception {
-		log.info("INIT fix.");
-		final var ans = this.fixUnitTestsUseCase.execute();
+  @PostMapping(path = "/fix", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+  ResponseEntity<FixedUnitTests> fix(RequestContextV2 requestContextV2) throws Exception {
+    log.info("INIT fix.");
+    final var ans = this.fixUnitTestsUseCase.execute();
 
-		log.info("FINISH fix.");
-		return ResponseEntity.status(HttpStatus.OK).body(ans);
-	}
-
+    log.info("FINISH fix.");
+    return ResponseEntity.status(HttpStatus.OK).body(ans);
+  }
 }

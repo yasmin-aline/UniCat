@@ -23,11 +23,13 @@ public class RequestContextResolverV2 implements HandlerMethodArgumentResolver {
       NativeWebRequest webRequest,
       WebDataBinderFactory binderFactory) {
     HttpServletRequest request = (HttpServletRequest) webRequest.getNativeRequest();
-    String classCode = request.getParameter("targetClassCode");
-    String dependenciesCode = request.getParameter("dependenciesCode");
-    String guidelines = request.getParameter("guidelines");
+    final var classCode = request.getParameter("targetClassCode");
+    final var dependenciesCode = request.getParameter("dependenciesCode");
+    final var guidelines = request.getParameter("guidelines");
+    final var testClassCode = request.getParameter("testClassCode");
+    final var errors = request.getParameter("errors");
 
-    RequestContextV2 context = new RequestContextV2(classCode, dependenciesCode, guidelines);
+    RequestContextV2 context = new RequestContextV2(classCode, dependenciesCode, guidelines, testClassCode, errors);
     RequestContextHolderV2.setContext(context);
 
     return context;

@@ -1,6 +1,5 @@
 package org.jetbrains.plugins.template.toolWindow
 
-import com.fasterxml.jackson.module.kotlin.convertValue
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.intellij.execution.ProgramRunnerUtil.executeConfiguration
@@ -82,6 +81,9 @@ class MyToolWindowFactory : ToolWindowFactory {
         private lateinit var guidelinesArea: JTextArea
 
         lateinit var testFile: File
+        fun isTestFileInitialized(): Boolean {
+            return this::testFile.isInitialized
+        }
         var targetClassName: String = ""
         var targetClassPackage: String = ""
         var targetClassCode: String = ""
@@ -280,9 +282,8 @@ class MyToolWindowFactory : ToolWindowFactory {
                     targetClassName = psiFile.name
                     targetClassPackage = psiFile.packageName
                     targetClassCode = document.text
-                    // Execute init request off the UI thread to avoid blocking the EDT
                     ApplicationManager.getApplication().executeOnPooledThread {
-                        enviarRequisicaoInit(project)
+                        gerarTestesUnitarios(project)
                     }
                 } else {
                     appendLog("[INFO] O arquivo ativo não é um arquivo Java.")
@@ -292,169 +293,61 @@ class MyToolWindowFactory : ToolWindowFactory {
             }
         }
 
-        private fun buscarCodigoDasDependencias(project: Project, fqns: List<String>): String {
-            val facade = com.intellij.psi.JavaPsiFacade.getInstance(project)
-            val scope = com.intellij.psi.search.GlobalSearchScope.allScope(project)
-            val visitados = mutableSetOf<String>()
-            val codigoFonte = mutableListOf<String>()
-            realDependenciesUsed.clear()
 
-            fun processarClasse(fqn: String) {
-                if (fqn in visitados) {
-                    appendLog("🔁 Dependência já visitada: $fqn")
-                    return
-                }
-                appendLog("📦 Processando dependência: $fqn")
-                visitados.add(fqn)
-                realDependenciesUsed.add(fqn)
+        // Novo método para gerar testes unitários
+        private fun gerarTestesUnitarios(project: Project) {
+            appendLog("🔍 Extraindo código-fonte das dependências com base nos imports da classe alvo...")
 
-                val psiClass = facade.findClass(fqn, scope)
-                val sourceCode = psiClass?.containingFile?.text
-                if (sourceCode == null) {
-                    appendLog("❌ Código não encontrado para: $fqn")
-                    codigoFonte.add("// Classe não encontrada no projeto: $fqn")
-                    return
-                }
+            val dependenciasFQNs = extrairImportsDoCodigo(targetClassCode)
+                .filter { it.startsWith("com.") || it.startsWith("br.") }
+                .distinct()
 
-                appendLog("✅ Código encontrado para: $fqn")
-                codigoFonte.add(sourceCode)
-
-                val regexImport = Regex("""import\s+((com|br)\.[\w.]+);""")
-                val subDependencies = regexImport.findAll(sourceCode)
-                    .map { it.groupValues[1] }
-                    .filter { it.startsWith("com.deckofcards") && it !in visitados }
-                    .toList()
-
-                if (subDependencies.isNotEmpty()) {
-                    appendLog("🔍 Subdependências detectadas em $fqn: ${subDependencies.joinToString(", ")}")
-                }
-
-                subDependencies.forEach {
-                    appendLog("➡️ Processando subdependência: $it")
-                    processarClasse(it)
-                }
+            val dependenciesCode = dependenciasFQNs.joinToString("\n\n") { fqn ->
+                val psiClass = com.intellij.psi.JavaPsiFacade.getInstance(project)
+                    .findClass(fqn, com.intellij.psi.search.GlobalSearchScope.allScope(project))
+                psiClass?.containingFile?.text ?: "// Código não encontrado para $fqn"
             }
+            // Armazena o valor de dependenciesCode na variável de instância
+            this.dependenciasCodigo = dependenciesCode
 
-            fqns.forEach { processarClasse(it) }
-            return codigoFonte.joinToString("\n\n")
-        }
+            appendLog("✅ Código-fonte das dependências extraído. Total de dependências: ${dependenciasFQNs.size}")
 
-        private fun enviarRequisicaoInit(project: Project) {
-            appendLog("🔄 Preparando payload para /init...")
-            appendLog("⏳ Enviando requisição para http://localhost:8080/unitcat/api/init")
-
-            try {
-                val payload = listOf(
-                    "targetClassName" to targetClassName,
-                    "targetClassCode" to targetClassCode,
-                    "targetClassPackage" to targetClassPackage
-                ).joinToString("&") { (k, v) ->
-                    "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
-                }
-
-                val client = java.net.http.HttpClient.newHttpClient()
-
-                val request = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create("http://localhost:8080/unitcat/api/init"))
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(payload))
-                    .build()
-
-                val response = executeWithWaitingLogs("PROCESSING") {
-                    client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-                }
-
-                appendLog("[INFO] Código de status HTTP de /init: ${response.statusCode()}")
-
-                val objectMapper = jacksonObjectMapper()
-                val jsonTree = objectMapper.readTree(response.body())
-
-                val analysisNode = jsonTree.get("analysisResponseDTO")
-                val analysisMap: Map<String, Any>? =
-                    if (analysisNode != null && !analysisNode.isNull) objectMapper.convertValue(analysisNode) else null
-
-                val customDepsNode = jsonTree.get("customDependencies")
-
-                val customDeps: List<String> = if (customDepsNode != null && customDepsNode.isArray) {
-                    customDepsNode.mapNotNull { it.asText() }
-                } else {
-                    emptyList()
-                }
-
-                appendLog("✅ Dependências identificadas (${customDeps.size}): ${customDeps.joinToString(", ")}")
-                appendLog("🔍 Recuperando código-fonte das dependências...")
-
-                dependenciasCodigo = buscarCodigoDasDependencias(project, customDeps)
-                appendLog("✅ Código-fonte das dependências carregado com ${customDeps.size} itens.")
-
-                guidelines = guidelinesArea.text
-                parsedResponse = ParsedInitResponse(
-                    analysisResponseDTO = analysisMap,
-                    customDependencies = customDeps
-                )
-
-                appendLog("📄 [INFO] Enviando dados de guidelines com tamanho de ${guidelines.length} caracteres.")
-                enviarRequisicaoComplete(project)
-
-            } catch (e: Exception) {
-                appendLog("[ERROR] Erro ao enviar requisição /init: ${e.message}")
-                e.printStackTrace()
-            }
-        }
-
-        private fun enviarRequisicaoComplete(project: Project) {
-            appendLog("[PROCESSING] Preparando payload para /complete...")
-            appendLog("[PROCESSING] Enviando requisição para http://localhost:8080/unitcat/api/complete")
-            appendLog("📦 Payload resumido: targetClassName='$targetClassName', targetClassPackage='$targetClassPackage', guidelines='${guidelines.take(50)}...'")
-
-            val dependenciesName = realDependenciesUsed.joinToString(",")
-            appendLog("dependenciesName = $dependenciesName")
-
-            val completeRequestBody = listOf(
-                "targetClassName" to targetClassName,
+            val payload = listOf(
                 "targetClassCode" to targetClassCode,
-                "targetClassPackage" to targetClassPackage,
-                "guidelines" to guidelines,
-                "dependencies" to dependenciasCodigo,
-                "dependenciesName" to dependenciesName
+                "dependenciesCode" to dependenciesCode
             ).joinToString("&") { (k, v) ->
                 "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
             }
 
-            appendLog("[INFO] Payload completo para /complete possui ${completeRequestBody.length} caracteres.")
-            val client = java.net.http.HttpClient.newHttpClient()
+            appendLog("[INFO] Enviando requisição para /generate com payload de tamanho ${payload.length} caracteres.")
 
-            val completeRequest = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create("http://localhost:8080/unitcat/api/complete"))
+            val client = java.net.http.HttpClient.newHttpClient()
+            val request = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create("http://localhost:8080/api/v2/unicat/generate"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(completeRequestBody))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(payload))
                 .build()
 
             try {
-                val completeResponse = executeWithWaitingLogs("PROCESSING") {
-                    client.send(
-                        completeRequest,
-                        java.net.http.HttpResponse.BodyHandlers.ofString()
-                    )
+                val response = executeWithWaitingLogs("PROCESSING") {
+                    client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                 }
 
-                appendLog("✅ Resposta do /complete recebida com status ${completeResponse.statusCode()}")
+                appendLog("✅ Resposta recebida com status ${response.statusCode()}")
 
-                val objectMapper = jacksonObjectMapper()
-                val completeResponseDTO = objectMapper.readValue(
-                    completeResponse.body(),
-                    CompleteResponseDTO::class.java
-                )
-
-                this@MyToolWindowFactory.latestGeneratedTestClassFqn = completeResponseDTO.generatedTestClassFqn
-                appendLog("🎉 Classe de teste gerada: ${completeResponseDTO.generatedTestClassFqn}")
-
-                criarClasseDeTeste(project, completeResponseDTO.generatedTestCode)
+                val generatedTestClassCode = response.body()
+                criarClasseDeTeste(project, generatedTestClassCode)
 
             } catch (e: Exception) {
+                appendLog("[ERROR] Erro ao enviar requisição /generate: ${e.message}")
                 e.printStackTrace()
-                appendLog("[ERROR] Erro ao enviar requisição /complete: ${e.message}")
             }
+        }
+
+        // Novo método auxiliar para extrair imports
+        private fun extrairImportsDoCodigo(codigo: String): List<String> {
+            val regexImport = Regex("""import\s+([a-zA-Z0-9_.]+);""")
+            return regexImport.findAll(codigo).map { it.groupValues[1] }.toList()
         }
 
         private fun criarClasseDeTeste(project: Project, testClassContentRaw: String) {
@@ -502,10 +395,14 @@ class MyToolWindowFactory : ToolWindowFactory {
 
             val fqn = if (packageName.isNotBlank()) "$packageName.$className" else className
             compileBeforeJUnit(project, fqn)
+            latestGeneratedTestClassFqn = fqn
         }
 
         fun substituirMetodosNoArquivo(testFile: File, updatesJson: String) {
-            val objectMapper = jacksonObjectMapper()
+            appendLog("[PROCESSING] Iniciando substituição de métodos no arquivo de teste...")
+            val objectMapper = jacksonObjectMapper().apply {
+                propertyNamingStrategy = com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE
+            }
 
             data class ModifiedTestMethod(val methodName: String, val modifiedCode: String)
             data class UpdatePayload(
@@ -774,28 +671,75 @@ class MyToolWindowFactory : ToolWindowFactory {
         }
 
         myToolWindowInstance.appendLog("[INFO] Iniciando processo de retry em background...")
+
+        // Novo bloco: tenta inferir latestGeneratedTestClassFqn a partir do conteúdo do arquivo de teste, caso esteja vazio
+        if (latestGeneratedTestClassFqn.isBlank()) {
+            if (myToolWindowInstance.isTestFileInitialized()) {
+                val lines = myToolWindowInstance.testFile.readLines()
+                val packageLine = lines.firstOrNull { it.trim().startsWith("package ") }
+                val classLine = lines.firstOrNull { it.contains("class ") }
+
+                if (classLine != null) {
+                    val classNameRegex = Regex("""class\s+(\w+)""")
+                    val match = classNameRegex.find(classLine)
+                    val className = match?.groups?.get(1)?.value
+
+                    val packageName = packageLine
+                        ?.removePrefix("package")
+                        ?.removeSuffix(";")
+                        ?.trim()
+
+                    if (className != null) {
+                        latestGeneratedTestClassFqn = if (!packageName.isNullOrBlank()) "$packageName.$className" else className
+                        myToolWindowInstance.appendLog("[INFO] latestGeneratedTestClassFqn inferido a partir do conteúdo da classe de teste: $latestGeneratedTestClassFqn")
+                    } else {
+                        myToolWindowInstance.appendLog("[ERROR] Não foi possível inferir o nome da classe de teste a partir do arquivo.")
+                        return
+                    }
+                } else {
+                    myToolWindowInstance.appendLog("[ERROR] Não foi possível localizar linha da classe no arquivo de teste.")
+                    return
+                }
+            } else {
+                myToolWindowInstance.appendLog("[ERROR] Retry cancelado: latestGeneratedTestClassFqn está vazio e testFile não foi inicializado.")
+                return
+            }
+        }
+
+        // Garantir que testFile esteja inicializado
+        if (!myToolWindowInstance.isTestFileInitialized()) {
+            myToolWindowInstance.appendLog("[WARNING] testFile não estava inicializado. Tentando localizar arquivo da classe de teste manualmente...")
+
+            val generatedClassName = latestGeneratedTestClassFqn.substringAfterLast(".")
+            val packagePath = latestGeneratedTestClassFqn.substringBeforeLast(".").replace(".", "/")
+            val filePath = "${project.basePath}/src/test/java/$packagePath/$generatedClassName.java"
+            val file = File(filePath)
+
+            if (file.exists()) {
+                myToolWindowInstance.appendLog("[INFO] Arquivo da classe de teste localizado: ${file.absolutePath}")
+                myToolWindowInstance.testFile = file
+            } else {
+                myToolWindowInstance.appendLog("[ERROR] Não foi possível localizar o arquivo de teste: $filePath")
+                return
+            }
+        }
+
         // Run coverage capture, HTTP request and file updates on a pooled thread
         ApplicationManager.getApplication().executeOnPooledThread {
-            val formParams = listOf(
-                "targetClassName" to myToolWindowInstance.targetClassName,
-                "targetClassPackage" to myToolWindowInstance.targetClassPackage,
+            val payload = listOf(
                 "targetClassCode" to myToolWindowInstance.targetClassCode,
+                "dependenciesCode" to myToolWindowInstance.dependenciasCodigo,
                 "testClassCode" to myToolWindowInstance.testFile.readText(),
-                "dependencies" to myToolWindowInstance.dependenciasCodigo,
-                "dependenciesName" to myToolWindowInstance.realDependenciesUsed.joinToString(","),
-                "failingTestDetailsRequestDTOS" to jacksonObjectMapper().writeValueAsString(errosDeTesteGlobal),
-                "testResults" to myToolWindowInstance.lastTestResultsSerialized,
-                "coverageReport" to jacksonObjectMapper().writeValueAsString(coverageReport),
-                "attemptNumber" to retryCount.toString()
+                "errors" to jacksonObjectMapper().writeValueAsString(errosDeTesteGlobal)
             ).joinToString("&") { (k, v) ->
-                "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
+                "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
             }
 
-            myToolWindowInstance.appendLog("[INFO] Enviando detalhes dos testes falhos para ajustá-los via API")
+            myToolWindowInstance.appendLog("[INFO] Enviando requisição para /fix com os detalhes dos testes falhos.")
             val request = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create("http://localhost:8080/unitcat/api/retry"))
+                .uri(java.net.URI.create("http://localhost:8080/api/v2/unicat/fix"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(formParams))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(payload))
                 .build()
 
             try {
@@ -953,7 +897,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                     processRetry(project)
                 } else {
                     myToolWindowInstance.appendLog("[INFO] Compilação bem-sucedida para $packageName.$className. Executando JUnit Runner.")
-                    executeJUnitRunner(project, latestGeneratedTestClassFqn)
+                    executeJUnitRunner(project, fqn)
                 }
             }
         }

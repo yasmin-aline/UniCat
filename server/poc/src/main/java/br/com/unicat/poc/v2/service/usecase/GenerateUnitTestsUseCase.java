@@ -19,7 +19,7 @@ import java.util.Objects;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class GenerateUnitTests {
+public class GenerateUnitTestsUseCase {
 	private final InitialAnalysesPrompt initialAnalysesPrompt;
 	private final DesignScenariosPrompt designScenariosPrompt;
 	private final GenerateUnitTestsPrompt generateUnitTestsPrompt;
@@ -38,17 +38,19 @@ public class GenerateUnitTests {
 
 	public String execute() throws Exception {
 		log.info("INIT GenerateUnitTests execute.\n\n");
-//		final var initialAnalysesRawText = requestLLMWith(initialAnalysesPrompt.get());
-//		log.info(initialAnalysesRawText);
+		final var initialAnalysesRawText = requestLLMWith(initialAnalysesPrompt.get());
+		log.info(initialAnalysesRawText);
 //		final var mockAns1 = prompt1Answer.getContentAsString(Charset.defaultCharset());
 //		final var scenarios = requestLLMWith(designScenariosPrompt.get(mockAns1));
-//		log.info(scenarios);
+		final var scenarios = requestLLMWith(designScenariosPrompt.get(initialAnalysesRawText));
+		log.info(scenarios);
 
-		final var mockAns2 = prompt2Answer.getContentAsString(Charset.defaultCharset());
-		final var generatedTests = requestLLMWith(generateUnitTestsPrompt.get(mockAns2));
+//		final var mockAns2 = prompt2Answer.getContentAsString(Charset.defaultCharset());
+//		final var generatedTests = requestLLMWith(generateUnitTestsPrompt.get(mockAns2));
+		final var generatedTests = requestLLMWith(generateUnitTestsPrompt.get(scenarios));
 		log.info("Generated tests: {}", generatedTests);
-		return generatedTests;
-//		prompt3Answer.getContentAsString(Charset.defaultCharset());
+		return stripJsonFences(generatedTests);
+//		return prompt3Answer.getContentAsString(Charset.defaultCharset());
 	}
 
 	private String requestLLMWith(final Prompt prompt) {
@@ -57,7 +59,7 @@ public class GenerateUnitTests {
 
 	private <T> T requestLLMWith(final Prompt prompt, final Class<T> clazz) throws Exception {
 		final var assistantMessage = callLlmAPI(prompt);
-		final var rawText = stripJsonFences(assistantMessage);
+		final var rawText = stripJsonFences(assistantMessage.getText());
 		return objectMapper.readValue(rawText, clazz);
 	}
 
@@ -66,10 +68,10 @@ public class GenerateUnitTests {
 		return chatResponse.getResult().getOutput();
 	}
 
-	private static String stripJsonFences(AssistantMessage assistantMessage) {
-		var rawText = Objects.requireNonNull(assistantMessage.getText()).trim();
+	private static String stripJsonFences(String text) {
+		var rawText = Objects.requireNonNull(text).trim();
 		if (rawText.startsWith("```json")) rawText = rawText.substring("```json".length()).trim();
-		else if (rawText.endsWith("```")) rawText = rawText.substring(0, rawText.length() - 3).trim();
+		if (rawText.endsWith("```")) rawText = rawText.substring(0, rawText.length() - 3).trim();
 		return rawText;
 	}
 

@@ -12,16 +12,16 @@ Aplicar as correções identificadas no diagnóstico, ajustando mocks, assertion
 ## Entrada
 ```
 DIAGNÓSTICO DO PROMPT 4A:
-[JSON COM ANÁLISE COMPLETA DOS ERROS E CORREÇÕES SUGERIDAS]
+$diagnosticJson$
 
 CLASSE DE TESTE COMPLETA:
-[CÓDIGO JAVA COMPLETO DA CLASSE DE TESTE]
+$testClassCode$
 
 CLASSE ORIGINAL:
-[CÓDIGO DA CLASSE SENDO TESTADA]
+$targetClassCode$
 
 DEPENDÊNCIAS:
-[CÓDIGO DAS DEPENDÊNCIAS SE NECESSÁRIO]
+$dependenciesCode$
 ```
 
 ## Processo de Correção (Step-by-Step)
@@ -59,33 +59,40 @@ DEPENDÊNCIAS:
 - **Correções Precisas**: Aplicar EXATAMENTE o que foi diagnosticado
 - **Comportamento Atual**: Testes devem validar o que a classe FAZ agora
 - **Minimal Changes**: Mudar apenas o necessário para passar
-- **Imports Completos**: Incluir qualquer novo import necessário
+- **Imports Completos**: Incluir qualquer novo import necessário na lista `required_new_imports`.
 - **Comentários de Bug**: Adicionar quando identificado no diagnóstico
 - **Preservar Estrutura**: Manter @Nested, @DisplayName, organização
 
 ## Formato de Saída
+Retorne APENAS o JSON, sem explicações adicionais:
 
-### Parte 1 - Novos Imports Necessários
-```java
-// NOVOS IMPORTS NECESSÁRIOS:
-import java.math.BigDecimal;
-import static org.mockito.ArgumentMatchers.eq;
-```
-
-### Parte 2 - Classe de Teste Corrigida
-```java
-[CLASSE DE TESTE COMPLETA COM CORREÇÕES APLICADAS]
+```json
+{
+  "modified_test_methods": [
+    {
+      "method_name": "<\Nome do método de teste corrigido/comentado 1\>",
+      "modified_code": "<\Código completo do método de teste corrigido OU comentado com explicação, como uma string Java\>"
+    },
+    {
+      "method_name": "<\Nome do método de teste corrigido/comentado 2\>",
+      "modified_code": "<\Código completo do método de teste corrigido OU comentado com explicação, como uma string Java\>"
+    }
+    // ... mais métodos modificados
+  ],
+  "required_new_imports": [
+    "<\FQN do novo import necessário 1\>",
+    "<\FQN do novo import necessário 2\>"
+    // ... mais imports, se houver
+  ]
+}
 ```
 
 ## Mapeamento Diagnóstico → Correção
 
 Para cada item em `failures`:
-1. `testMethod` → localizar método na classe
-2. `correction.whatToFix` → identificar o que mudar
-3. `correction.howToFix` → aplicar a mudança
-4. `correction.codeSnippet` → usar código fornecido
-5. `behavioralAnalysis.actualBehavior` → garantir alinhamento
-6. `possibleBugAlert` → adicionar como comentário
+1. `testMethod` → será o `method_name` no JSON.
+2. O código completo do método de teste corrigido (incluindo anotações, corpo do método e comentários) será o `modified_code`.
+3. Quaisquer novos imports identificados durante a correção devem ser adicionados à lista `required_new_imports`.
 
 ## Exemplos (Few-Shot)
 
@@ -117,29 +124,25 @@ Para cada item em `failures`:
 void should_calculateTotal_when_hasDiscount() {
     // Given
     Order order = new Order(100.0, true);
-    
-    // When  
+
+    // When
     double result = orderService.calculateTotal(order);
-    
+
     // Then
     assertThat(result).isEqualTo(85.0); // ERRO AQUI
 }
 ```
 
 ### Exemplo - Teste Corrigido:
-```java
-@Test
-@DisplayName("Should calculate total when has discount")
-void should_calculateTotal_when_hasDiscount() {
-    // Given
-    Order order = new Order(100.0, true);
-    
-    // When  
-    double result = orderService.calculateTotal(order);
-    
-    // Then
-    // ALERT: Discount is 10% but documentation mentions 15%
-    assertThat(result).isEqualTo(90.0); // Corrigido para refletir 10% de desconto
+```json
+{
+  "modified_test_methods": [
+    {
+      "method_name": "should_calculateTotal_when_hasDiscount",
+      "modified_code": "@Test\n@DisplayName(\"Should calculate total when has discount\")\nvoid should_calculateTotal_when_hasDiscount() {\n    // Given\n    Order order = new Order(100.0, true);\n\n    // When\n    double result = orderService.calculateTotal(order);\n\n    // Then\n    // ALERT: Discount is 10% but documentation mentions 15%\n    assertThat(result).isEqualTo(90.0); // Corrigido para refletir 10% de desconto\n}"
+    }
+  ],
+  "required_new_imports": []
 }
 ```
 
@@ -158,6 +161,4 @@ Antes de retornar, verifique:
 - Preserve formatação e estilo existente
 - Testes devem passar após correções
 - Se houver dúvida, siga o diagnóstico literalmente
-- Retorne imports novos primeiro, depois classe completa
-
----
+- Retorne APENAS o JSON estruturado no formato especificado
